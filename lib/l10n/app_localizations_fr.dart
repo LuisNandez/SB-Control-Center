@@ -35,6 +35,20 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsAboutDesc => 'Informations sur l\'application';
 
   @override
+  String get settingsRefreshMetadata => 'Mettre à jour les métadonnées';
+
+  @override
+  String get settingsRefreshMetadataDesc =>
+      'Revérifie vos mods sur Nexus Mods et complète les informations et images manquantes';
+
+  @override
+  String get metadataRefreshDone => 'Métadonnées mises à jour';
+
+  @override
+  String get metadataRefreshNoApiKey =>
+      'Ajoutez votre clé API Nexus Mods dans les paramètres pour mettre à jour les métadonnées.';
+
+  @override
   String get settingsPathsAndTools => 'Chemins et Outils';
 
   @override
@@ -476,11 +490,18 @@ class AppLocalizationsFr extends AppLocalizations {
       'La sélection ne contient pas de fichier .json de mod valide.';
 
   @override
-  String get aboutTitle => 'À propos du Centre de Contrôle CNS';
+  String get aboutTitle => 'À propos de SB Control Center';
 
   @override
   String get aboutContent =>
-      'Cette application est un gestionnaire de mods pour Stellar Blade, conçu pour fonctionner avec le Custom Nanosuit System (CNS).\n\nPrérequis : Pour une fonctionnalité complète avec les fichiers .rar et .7z, 7-Zip doit être installé sur votre système.';
+      'SB Control Center est un gestionnaire de mods pour Stellar Blade. Il installe, organise et met à jour vos mods au même endroit, et fonctionne avec le Custom Nanosuit System (CNS) pour les mods de tenues et de nanosuit.\n\nIl se connecte à Nexus Mods pour télécharger, vérifier les mises à jour et donner un Endorse aux mods que vous utilisez.\n\nPrérequis : pour une prise en charge complète des archives .rar et .7z, 7-Zip doit être installé sur votre système.';
+
+  @override
+  String get aboutEndorseCta =>
+      'Vous aimez cette application ? Un Endorse sur Nexus Mods aide beaucoup.';
+
+  @override
+  String get aboutEndorseThanks => 'Merci pour votre soutien !';
 
   @override
   String get aboutLinkText => 'Visitez mon profil de créateur';
@@ -939,6 +960,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get translateDescription => 'Traduire la description';
 
   @override
+  String get restoreOriginalDescription => 'Restaurer la description originale';
+
+  @override
   String get dialogTitleUE4SSReinstall => 'Réinstaller UE4SS';
 
   @override
@@ -1103,6 +1127,54 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get devExtractAction => 'Extraire';
+
+  @override
+  String get devTestSelfUpdateTitle => 'Tester l\'auto-installation';
+
+  @override
+  String get devTestSelfUpdateDesc =>
+      'Sélectionnez le paquet .zip de l\'application et installez-le par-dessus cette application, comme le fera la mise à jour automatique.';
+
+  @override
+  String get devSelfUpdateUnsupported =>
+      'La mise à jour automatique n\'est disponible que sous Windows.';
+
+  @override
+  String get devSelfUpdatePickTitle =>
+      'Sélectionnez le .zip de SB Control Center';
+
+  @override
+  String get devSelfUpdateFailed => 'Impossible d\'installer la mise à jour';
+
+  @override
+  String get devSelfUpdateDryRunTitle => 'Le paquet est valide (mode test)';
+
+  @override
+  String devSelfUpdateDryRunDesc(int count) {
+    return '$count fichiers trouvés. Rien n\'a été installé, car il ne s\'agit pas d\'une build de release.';
+  }
+
+  @override
+  String get devSelfUpdateConfirmTitle => 'Installer la mise à jour ?';
+
+  @override
+  String get devSelfUpdateConfirmDesc =>
+      'L\'application va se fermer, remplacer ses fichiers par ceux du paquet, puis se rouvrir automatiquement.';
+
+  @override
+  String get devSelfUpdateInstallAction => 'Installer et redémarrer';
+
+  @override
+  String get devSelfUpdateProgressTitle => 'Mise à jour de SB Control Center';
+
+  @override
+  String get devSelfUpdateExtracting => 'Extraction du paquet…';
+
+  @override
+  String get devSelfUpdateInstalling => 'Installation des fichiers…';
+
+  @override
+  String get devSelfUpdateRestarting => 'Redémarrage…';
 
   @override
   String get devExtractNoData =>
@@ -2121,8 +2193,9 @@ class AppLocalizationsFr extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          '$count mods disabled: they replace outfits already used by other mods',
-      one: '1 mod disabled: it replaces an outfit already used by another mod',
+          '$count mods désactivés : ils remplacent des tenues déjà utilisées par d’autres mods',
+      one:
+          '1 mod désactivé : il remplace une tenue déjà utilisée par un autre mod',
     );
     return '$_temp0';
   }
@@ -2245,7 +2318,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nexusPlanPremium => 'Premium';
 
   @override
-  String get nexusPlanStandard => 'Standard';
+  String get nexusPlanMember => 'Membre';
+
+  @override
+  String get nexusPlanSupporter => 'Soutien';
 
   @override
   String get nexusApiRequestsRemaining => 'REQUÊTES API RESTANTES';
@@ -2257,8 +2333,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nexusApiHourly => 'Par heure';
 
   @override
-  String get downloadFreeAccountLimit =>
-      'Les comptes gratuits sont limités à 3 Mo/s par Nexus Mods';
+  String get downloadMemberAccountLimit =>
+      'Les comptes Membre sont limités à 1,5 Mo/s par Nexus Mods';
+
+  @override
+  String get downloadSupporterAccountLimit =>
+      'Les comptes Soutien sont limités à 3 Mo/s par Nexus Mods';
 
   @override
   String get downloadRetryTooltip => 'Réessayer';
@@ -2297,4 +2377,31 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get downloadResuming => 'Reprise...';
+
+  @override
+  String get apiKeyPromptTitle => 'Configurez votre clé API Nexus Mods';
+
+  @override
+  String get apiKeyPromptMessage =>
+      'Aucune clé API n\'a été détectée. La configurer est facultatif, mais recommandé pour plus de confort : elle permet de rechercher les mises à jour, de télécharger en un clic (nxm://) et de charger les images et les infos de Nexus Mods.';
+
+  @override
+  String get apiKeyPromptConfigure => 'Configurer la clé API';
+
+  @override
+  String get apiKeyPromptSkip => 'Ignorer';
+
+  @override
+  String get apiKeyPromptDontShowAgain => 'Ne plus afficher ce message';
+
+  @override
+  String get adjustCoverTooltip => 'Ajuster la couverture';
+
+  @override
+  String get noCoverToAdjust => 'Ce mod n\'a pas de couverture à ajuster';
+
+  @override
+  String errorAdjustingCoverText(Object error) {
+    return 'Erreur lors de l\'ajustement de la couverture : $error';
+  }
 }

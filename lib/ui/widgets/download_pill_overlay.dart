@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui' show FontFeature, lerpDouble;
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/nexus_plan.dart';
 import '../../services/download_manager.dart';
 import '../theme/ios_theme.dart';
 import 'ios_progress_bar.dart';
@@ -12,16 +13,33 @@ import 'ios_widgets.dart';
 class DownloadOverlay {
   static OverlayEntry? _overlayEntry;
 
+  /// Lo activa el panel de instalación mientras está abierto: la cola de
+  /// descargas ya se ve dentro del panel, así que la píldora flotante se
+  /// desvanece para no duplicar información.
+  static final ValueNotifier<bool> suppressed = ValueNotifier<bool>(false);
+
   static void show(BuildContext context) {
     if (_overlayEntry != null) return;
 
     _overlayEntry = OverlayEntry(
-      builder: (context) => const Positioned(
+      builder: (context) => Positioned(
         top: 8,
         left: 0,
         right: 0,
         child: SafeArea(
-          child: DownloadPillWidget(),
+          child: ValueListenableBuilder<bool>(
+            valueListenable: suppressed,
+            builder: (context, hidden, child) => IgnorePointer(
+              ignoring: hidden,
+              child: AnimatedOpacity(
+                opacity: hidden ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: child,
+              ),
+            ),
+            child: const DownloadPillWidget(),
+          ),
         ),
       ),
     );
@@ -342,7 +360,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
   // --------------------------------------------------------------------------
   Widget _buildExpandedList(BuildContext context, List<DownloadTask> tasks) {
     final l10n = AppLocalizations.of(context)!;
-    final bool isPremium = _manager.isUserPremium;
+    final NexusPlan plan = _manager.userPlan;
 
     return Container(
       key: const ValueKey('expanded'),
@@ -378,10 +396,10 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
               itemCount: tasks.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) =>
-                  _buildTaskCard(context, tasks[index], l10n, isPremium),
+                  _buildTaskCard(context, tasks[index], l10n, plan),
             ),
           ),
-          if (!isPremium)
+          if (!plan.isPremium)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Row(
@@ -395,7 +413,9 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      l10n.downloadFreeAccountLimit,
+                      plan == NexusPlan.supporter
+                          ? l10n.downloadSupporterAccountLimit
+                          : l10n.downloadMemberAccountLimit,
                       style: const TextStyle(
                         color: IosColors.secondaryLabel,
                         fontSize: 11.5,
@@ -414,7 +434,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
     BuildContext context,
     DownloadTask task,
     AppLocalizations l10n,
-    bool isPremium,
+    NexusPlan plan,
   ) {
     final bool paused = task.status == DownloadStatus.paused;
 
@@ -511,7 +531,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                                 : IosColors.secondaryLabel,
                           ),
                         ),
-                        if (isPremium) ...[
+                        if (plan != NexusPlan.member) ...[
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -519,16 +539,22 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                               vertical: 1.5,
                             ),
                             decoration: BoxDecoration(
-                              color: IosColors.yellow.withOpacity(0.18),
+                              color: (plan.isPremium ? IosColors.yellow : IosColors.green)
+                                  .withOpacity(0.18),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text(
-                              "PREMIUM",
+                            child: Text(
+                              (plan.isPremium
+                                      ? l10n.nexusPlanPremium
+                                      : l10n.nexusPlanSupporter)
+                                  .toUpperCase(),
                               style: TextStyle(
                                 fontSize: 9,
                                 letterSpacing: 0.4,
                                 fontWeight: FontWeight.w700,
-                                color: IosColors.yellow,
+                                color: plan.isPremium
+                                    ? IosColors.yellow
+                                    : IosColors.green,
                               ),
                             ),
                           ),

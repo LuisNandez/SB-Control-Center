@@ -24,6 +24,20 @@ class SkippedVersionItem {
   final String version;
 }
 
+/// Resultado del aviso que invita a configurar la API key al abrir la app.
+class ApiKeyPromptResult {
+  const ApiKeyPromptResult({
+    required this.configure,
+    required this.dontShowAgain,
+  });
+
+  /// true = "Configurar API" (ir a Ajustes); false = "Omitir".
+  final bool configure;
+
+  /// Estado de la casilla "No volver a mostrar este mensaje".
+  final bool dontShowAgain;
+}
+
 /// Alertas de vidrio (estilo iOS/macOS) para los submenús de Ajustes.
 /// Toda la lógica de negocio llega por callbacks: aquí solo hay interfaz.
 class SettingsDialogs {
@@ -217,6 +231,181 @@ class SettingsDialogs {
             onPressed: () => Navigator.of(ctx).pop(),
           ),
         ],
+      ),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  //  Aviso inicial: configurar la API key
+  // --------------------------------------------------------------------------
+
+  /// Aviso (no obligatorio) que anima a configurar la API key de Nexus.
+  /// Botones: "Omitir" y "Configurar API", más la casilla "No volver a mostrar
+  /// este mensaje" y un selector de idioma (mini menú con los 10 idiomas) para
+  /// poder leer el aviso en tu idioma. Hay que elegir uno de los dos botones
+  /// (no se cierra al tocar fuera) para que el estado de la casilla nunca se
+  /// pierda.
+  ///
+  /// [onLanguageChanged] debe guardar el idioma y aplicarlo a la app; el aviso
+  /// se vuelve a traducir al instante.
+  static Future<ApiKeyPromptResult> apiKeyPrompt(
+    BuildContext context, {
+    required Future<void> Function(String code) onLanguageChanged,
+  }) async {
+    bool dontShowAgain = false;
+
+    final result = await showIosDialog<ApiKeyPromptResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setS) {
+            // Se consulta aquí (no fuera) para que, al cambiar de idioma, el
+            // aviso se reconstruya con los textos del idioma nuevo.
+            final l10n = AppLocalizations.of(ctx)!;
+            final currentLang = Localizations.localeOf(ctx).languageCode;
+
+            return IosDialogShell(
+              title: l10n.apiKeyPromptTitle,
+              message: l10n.apiKeyPromptMessage,
+              width: 400,
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: _languagePill(
+                      context: ctx,
+                      current: currentLang,
+                      onSelected: (code) async {
+                        if (code == currentLang) return;
+                        await onLanguageChanged(code);
+                        if (ctx.mounted) setS(() {});
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  IosCheckRow(
+                    label: l10n.apiKeyPromptDontShowAgain,
+                    selected: dontShowAgain,
+                    onTap: () => setS(() => dontShowAgain = !dontShowAgain),
+                  ),
+                ],
+              ),
+              actions: [
+                IosDialogButton(
+                  label: l10n.apiKeyPromptSkip,
+                  onPressed: () => Navigator.of(dialogContext).pop(
+                    ApiKeyPromptResult(
+                      configure: false,
+                      dontShowAgain: dontShowAgain,
+                    ),
+                  ),
+                ),
+                IosDialogButton(
+                  label: l10n.apiKeyPromptConfigure,
+                  bold: true,
+                  onPressed: () => Navigator.of(dialogContext).pop(
+                    ApiKeyPromptResult(
+                      configure: true,
+                      dontShowAgain: dontShowAgain,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    return result ??
+        ApiKeyPromptResult(configure: false, dontShowAgain: dontShowAgain);
+  }
+
+  /// Botón pequeño con el idioma actual (🌐 Español ▾). Al pulsarlo abre un
+  /// mini menú emergente, anclado debajo del botón, con los 10 idiomas en su
+  /// nombre nativo y una marca azul en el actual.
+  static Widget _languagePill({
+    required BuildContext context,
+    required String current,
+    required ValueChanged<String> onSelected,
+  }) {
+    Future<void> open(BuildContext buttonContext) async {
+      final button = buttonContext.findRenderObject() as RenderBox;
+      final overlay = Navigator.of(buttonContext)
+          .overlay!
+          .context
+          .findRenderObject() as RenderBox;
+      final topLeft = button.localToGlobal(
+        Offset(0, button.size.height + 4),
+        ancestor: overlay,
+      );
+      final position = RelativeRect.fromLTRB(
+        topLeft.dx,
+        topLeft.dy,
+        overlay.size.width - topLeft.dx - button.size.width,
+        overlay.size.height - topLeft.dy,
+      );
+      final code = await showMenu<String>(
+        context: buttonContext,
+        position: position,
+        constraints: const BoxConstraints(minWidth: 180),
+        items: [
+          for (final e in languages.entries)
+            PopupMenuItem<String>(
+              value: e.key,
+              height: 36,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    child: e.key == current
+                        ? const Icon(Icons.check_rounded,
+                            size: 16, color: IosColors.blue)
+                        : null,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(e.value),
+                ],
+              ),
+            ),
+        ],
+      );
+      if (code != null) onSelected(code);
+    }
+
+    return Builder(
+      builder: (buttonContext) => MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => open(buttonContext),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: IosColors.fill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.language_rounded,
+                    size: 16, color: IosColors.secondaryLabel),
+                const SizedBox(width: 6),
+                Text(
+                  languages[current] ?? current,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: IosColors.label,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(Icons.expand_more_rounded,
+                    size: 16, color: IosColors.secondaryLabel),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

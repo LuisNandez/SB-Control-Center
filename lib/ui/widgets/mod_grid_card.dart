@@ -36,6 +36,7 @@ class ModGridCard extends StatefulWidget {
 
   final VoidCallback onEditNameTap;
   final VoidCallback onSetCoverTap;
+  final VoidCallback onAdjustCoverTap;
   final VoidCallback onRevertCoverTap;
   final VoidCallback onShowFolderTap;
   final VoidCallback onShowGalleryTap;
@@ -64,6 +65,7 @@ class ModGridCard extends StatefulWidget {
     required this.onDisable,
     required this.onEditNameTap,
     required this.onSetCoverTap,
+    required this.onAdjustCoverTap,
     required this.onRevertCoverTap,
     required this.onShowFolderTap,
     required this.onShowGalleryTap,
@@ -485,6 +487,9 @@ class _ModGridCardState extends State<ModGridCard> {
                           case 'set_cover':
                             widget.onSetCoverTap();
                             break;
+                          case 'adjust_cover':
+                            widget.onAdjustCoverTap();
+                            break;
                           case 'revert_cover':
                             widget.onRevertCoverTap();
                             break;
@@ -505,6 +510,7 @@ class _ModGridCardState extends State<ModGridCard> {
                       itemBuilder: (context) => [
                         _menuItem('edit', HugeIcons.strokeRoundedEdit01, l10n.editModNameTooltip),
                         _menuItem('set_cover', HugeIcons.strokeRoundedImageAdd02, l10n.setCoverTooltip),
+                        _menuItem('adjust_cover', HugeIcons.strokeRoundedCrop, l10n.adjustCoverTooltip),
                         if (hasCustomCover)
                           _menuItem('revert_cover', HugeIcons.strokeRoundedImageCounterClockwise, l10n.restoreOriginalCoverText),
                         _menuItem('folder', HugeIcons.strokeRoundedFolderInput, l10n.showInFolder),

@@ -13,8 +13,19 @@
 //   <staging>/LogicMods/...      -> .pak/.ucas/.utoc lógicos (+ sus .json)
 //   <staging>/ue4ss/Mods/<Mod>/  -> carpetas Lua/C++ (con enabled.txt)
 //   <staging>/ue4ss/*            -> archivos sueltos de la raíz de ue4ss
-//   <staging>/~mods/...          -> paks de contenido que vienen de regalo
+//   <staging>/~mods/...          -> paks de contenido (reemplazos del juego,
+//                                   híbridos, o assets que carga un Lua)
+//
+// Reparto de los .pak/.ucas/.utoc (lo decide el CONTENIDO del índice, y como
+// desempate dónde los puso el autor):
+//   - ModActor                       -> LogicMods (lo carga BPModLoader)
+//   - reemplaza assets del juego     -> ~mods (aunque también traiga Content/Mods)
+//   - solo Content/Mods, sin ModActor:
+//        * en una carpeta ~mods      -> ~mods (el autor lo decidió así)
+//        * suelto + hay scripts UE4SS-> ~mods (son los assets que carga el Lua)
+//        * suelto sin scripts UE4SS  -> LogicMods (comportamiento de siempre)
 import 'dart:io';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:path/path.dart' as p;
 import 'logic_mod_detector.dart';
 import 'hd_atool_audio_service.dart';
@@ -228,6 +239,34 @@ class LogicModStager {
     return cur;
   }
 
+  /// Si [dir] contiene una única subcarpeta y ningún archivo propio
+  /// (~mods/NierDodgeFX/*.pak), devuelve esa subcarpeta; si no, [dir].
+  static Future<Directory> _unwrapSingleFolder(Directory dir) async {
+    var cur = dir;
+    for (var i = 0; i < 4; i++) {
+      final dirs = <Directory>[];
+      var hasFile = false;
+      try {
+        await for (final e in cur.list(followLinks: false)) {
+          if (_skipName(p.basename(e.path))) continue;
+          if (e is Directory) {
+            dirs.add(e);
+          } else if (e is File) {
+            hasFile = true;
+          }
+        }
+      } catch (_) {
+        break;
+      }
+      if (dirs.length == 1 && !hasFile) {
+        cur = dirs.first;
+      } else {
+        break;
+      }
+    }
+    return cur;
+  }
+
   static bool _isDocFile(String path) => const [
         '.txt', '.md', '.png', '.jpg', '.jpeg', '.url', '.pdf', '.webp', '.gif'
       ].contains(p.extension(path).toLowerCase());
@@ -279,9 +318,18 @@ class LogicModStager {
     //    conservan como contenido (~mods).
     for (final d in scan.tildeModsDirs) {
       if (ue4ssRoot != null && p.isWithin(ue4ssRoot.path, d.path)) continue;
+      // Solo un ModActor justifica sacarlos de la carpeta ~mods donde el autor
+      // los puso: Content/Mods a secas, o mezclado con reemplazos del juego,
+      // se queda en ~mods (así lo empaquetó el autor y así funciona).
       final verdict =
           await LogicModDetector.classifyPackagesIn(d, recursive: true);
-      await _copyTree(d, verdict.isLogic ? logicOut : tildeOut, copied);
+      if (verdict.isLogic) {
+        await _copyTree(d, logicOut, copied);
+      } else {
+        // ~mods/<Nombre>/*.pak -> se aplana: el instalador ya crea
+        // ~mods/<Nombre vX>/ para este mod.
+        await _copyTree(await _unwrapSingleFolder(d), tildeOut, copied);
+      }
     }
 
     // 4) Contenedores sueltos fuera de las carpetas anteriores.
@@ -304,10 +352,23 @@ class LogicModStager {
     final jsonDirsDone = <String>{};
     for (final files in groups.values) {
       final verdict = await LogicModDetector.classifyFiles(files);
-      // Sin pistas (índice ilegible) y sin carpeta ~mods: en un archivo con
-      // UE4SS lo normal es que el pak sea la parte blueprint del mod.
-      final toLogic =
-          verdict.isLogic || (verdict.kind == PackageKind.unknown && scan.hasUe4ss);
+      final bool toLogic;
+      if (verdict.isLogic) {
+        toLogic = true; // ModActor
+      } else if (verdict.isModSpace) {
+        // Content/Mods sin ModActor: con scripts UE4SS son los assets que
+        // carga el Lua (van con los demás paks, en ~mods); sin ellos se
+        // conserva el comportamiento histórico (LogicMods).
+        toLogic = !scan.hasUe4ss;
+      } else if (verdict.kind == PackageKind.unknown) {
+        // Sin pistas (índice ilegible): en un archivo con UE4SS lo normal es
+        // que el pak sea la parte blueprint del mod.
+        toLogic = scan.hasUe4ss;
+      } else {
+        toLogic = false; // content: reemplazos / híbridos
+      }
+      debugPrint('[LogicModStager] ${p.basename(files.first.path)} -> '
+          '${toLogic ? 'LogicMods' : '~mods'} ($verdict)');
       final dest = toLogic ? logicOut : tildeOut;
       await dest.create(recursive: true);
       for (final f in files) {

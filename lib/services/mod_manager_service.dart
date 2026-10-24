@@ -9,6 +9,38 @@ import 'nexus_api_service.dart';
 import 'package:flutter/material.dart';
 
 class ModManagerService {
+  /// Carpetas que el CNS principal trae por defecto dentro de
+  /// `~mods/CustomNanosuitSystem` (Animations y Cosmetics). No son mods del
+  /// usuario, así que la app las ignora por completo: no se listan, no se
+  /// migran, no se consultan en Nexus ni se pueden activar/desactivar.
+  static const Set<String> coreCnsFolders = {'animations', 'cosmetics'};
+
+  /// ID de Nexus con el que versiones anteriores de la app marcaban esas
+  /// carpetas (CNS). Sirve para reconocerlas en __MOD_BACKUPS__.
+  static const String _legacyCoreCnsNexusId = '1496';
+
+  static bool isCoreCnsFolderName(String name) =>
+      coreCnsFolders.contains(name.toLowerCase());
+
+  /// ¿[dir] es una de las carpetas por defecto del CNS (Animations/Cosmetics)?
+  ///  - En la carpeta del CNS ([inCnsFolder]) basta con el nombre.
+  ///  - En cualquier otra (copias de seguridad de mods desactivados) exige
+  ///    además el nexusId del CNS que la app guardó antes, para no ocultar un
+  ///    mod del usuario que casualmente se llame igual.
+  static Future<bool> isCoreCnsAddon(Directory dir,
+      {required bool inCnsFolder}) async {
+    if (!isCoreCnsFolderName(p.basename(dir.path))) return false;
+    if (inCnsFolder) return true;
+    try {
+      final info = File(p.join(dir.path, 'nexus_info.json'));
+      if (!await info.exists()) return false;
+      final data = json.decode(await info.readAsString());
+      return data is Map && data['nexusId']?.toString() == _legacyCoreCnsNexusId;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<String?> getFitMeshTypeForMod(Directory modDir) async {
     try {
       await for (final entity in modDir.list()) {
@@ -186,15 +218,38 @@ class ModManagerService {
     if (nexusId == null || nexusId.isEmpty) return false;
     final v = data['galleryCacheSchema'];
     if (v is int && v >= _gallerySchema) return false;
-    // Último intento incompleto reciente: no se repite en cada arranque.
+    // Ya se intentó y quedó incompleta: con [retryPendingGallery] en false no
+    // se vuelve a intentar; con true, solo pasados [_galleryRetryAfter].
     final last = DateTime.tryParse(data['galleryAttemptAt']?.toString() ?? '');
-    if (last != null && DateTime.now().difference(last) < _galleryRetryAfter) {
+    if (last != null &&
+        (!retryPendingGallery ||
+            DateTime.now().difference(last) < _galleryRetryAfter)) {
       return false;
     }
     return true;
   }
 
+  /// false = una galería cuyo intento de descarga no se completó no se
+  /// reintenta en arranques posteriores. true = se reintenta tras 7 días.
+  static const bool retryPendingGallery = false;
   static const Duration _galleryRetryAfter = Duration(days: 7);
+
+  /// Olvida las galerías que fallaron en esta sesión (para poder reintentarlas).
+  static void clearGalleryFailuresThisSession() =>
+      _galleryFailedThisSession.clear();
+
+  /// Anota que se intentó bajar la galería de este mod (releyendo el archivo
+  /// para no pisar otros cambios).
+  static Future<void> _markGalleryAttempt(File infoFile) async {
+    try {
+      final latest =
+          Map<String, dynamic>.from(json.decode(await infoFile.readAsString()));
+      latest['galleryAttemptAt'] = DateTime.now().toIso8601String();
+      await infoFile.writeAsString(JsonEncoder.withIndent('  ').convert(latest));
+    } catch (e) {
+      print('[NexusGallery] No se pudo anotar el intento: $e');
+    }
+  }
 
   /// Borra la carpeta `_nexus_gallery` y las rutas locales de `gallery`.
   /// Se usa cuando la galería solo tiene la portada: esa imagen ya está
@@ -289,10 +344,14 @@ class ModManagerService {
       // completa; si lo está, únicamente se rellenan archivos que falten.
       if (!flagged || entries.isEmpty) {
         // Aquí sí hace falta la API: se respeta el límite horario.
-        if (!canCacheGallery(modDirectory.path)) return false;
+        if (!canCacheGallery(modDirectory.path)) {
+          if (!retryPendingGallery) await _markGalleryAttempt(infoFile);
+          return false;
+        }
         final nexusData = await NexusApiService.fetchNexusModData(nexusId, apiKey);
         if (nexusData == null) {
           _galleryFailedThisSession.add(modDirectory.path);
+          if (!retryPendingGallery) await _markGalleryAttempt(infoFile);
           return false;
         }
         entries = _galleryEntriesFrom(nexusData['gallery']);
@@ -368,15 +427,17 @@ class ModManagerService {
       final done = complete && failures == 0;
       if (done) latest['galleryCacheSchema'] = _gallerySchema;
       latest['galleryCachedAt'] = DateTime.now().toIso8601String();
+      if (!done) latest['galleryAttemptAt'] = DateTime.now().toIso8601String();
       await infoFile.writeAsString(encoder.convert(latest));
 
       if (!done) _galleryFailedThisSession.add(modDirectory.path);
       print('[NexusGallery] ${p.basename(modDirectory.path)}: '
           '${entries.length - failures}/${entries.length} imágenes en local'
-          '${done ? '' : ' (incompleta, se reintentará)'}');
+          '${done ? '' : (retryPendingGallery ? ' (incompleta, se reintentará)' : ' (incompleta)')}');
       return done;
     } catch (e) {
       _galleryFailedThisSession.add(modDirectory.path);
+      if (!retryPendingGallery) await _markGalleryAttempt(infoFile);
       print('[NexusGallery] Error en ${p.basename(modDirectory.path)}: $e');
       return false;
     }
@@ -408,6 +469,12 @@ class ModManagerService {
           final basenameLower = basename.toLowerCase();
           if (path == genericModsPath && (basenameLower == 'customnanosuitsystem' || basenameLower == 'logicmods')) continue;
           if (basename == '__mod_backups__') continue;
+          // Animations / Cosmetics del CNS principal: se ignoran (también si
+          // quedaron en la carpeta de copias de seguridad).
+          if (await isCoreCnsAddon(entity,
+              inCnsFolder: p.equals(path, finalModsPath))) {
+            continue;
+          }
 
           try {
             String? nexusId;
@@ -529,42 +596,6 @@ class ModManagerService {
               else customName = displayName;
             }
 
-            String folderNameLower = folderName.toLowerCase();
-            // Verificamos si estamos leyendo la ruta de CNS y si es Animations o Cosmetics
-            if (path == finalModsPath && (folderNameLower == 'animations' || folderNameLower == 'cosmetics')) {
-              bool needsSave = false;
-              Map<String, dynamic> localData = {};
-              
-              if (await infoFile.exists()) {
-                try {
-                  localData = json.decode(await infoFile.readAsString());
-                } catch (_) {}
-              }
-
-              // Forzamos el ID de Nexus de CNS (1496)
-              if (nexusId != '1496') {
-                nexusId = '1496';
-                localData['nexusId'] = '1496';
-                needsSave = true;
-              }
-              
-              // Opcional: Le ponemos un nombre claro para que no se confundan
-              if (!displayName.startsWith('CNS')) {
-                displayName = 'CNS ${folderName[0].toUpperCase()}${folderName.substring(1)}';
-                customName = displayName;
-                localData['displayName'] = displayName;
-                localData['customName'] = customName;
-                needsSave = true;
-              }
-
-              // Si le faltaba el ID, guardamos el json y forzamos la descarga de la portada 1496
-              if (needsSave) {
-                final encoder = JsonEncoder.withIndent('  ');
-                await infoFile.writeAsString(encoder.convert(localData));
-                await cacheNexusThumbnail(modDirectory: entity, nexusId: '1496', apiKey: apiKey);
-              }
-            }
-
             if (modType == null && isEnabled) {
               if (path == genericModsPath) modType = 'genericPak';
               else if (path == finalModsPath) modType = 'cns';
@@ -635,16 +666,6 @@ class ModManagerService {
     final enabledCnsMods = await getModsFromDirectory(finalModsPath, true);
     final enabledGenericMods = await getModsFromDirectory(genericModsPath, true, logicModNamesToIgnore: logicModFolderNames);
 
-    final List<ModInfo> coreCnsAddons = [];
-    enabledCnsMods.removeWhere((mod) {
-      final name = p.basename(mod.directory.path).toLowerCase();
-      if (name == 'animations' || name == 'cosmetics') {
-        coreCnsAddons.add(mod);
-        return true; // Lo remueve de enabledCnsMods
-      }
-      return false;
-    });
-
     if (gameRootPath == null) {
       return [...enabledCnsMods, ...enabledGenericMods, ...enabledLogicMods];
     }
@@ -652,18 +673,7 @@ class ModManagerService {
     final backupDirPath = p.join(gameRootPath, 'SB', 'Content', '__MOD_BACKUPS__');
     final disabledMods = await getModsFromDirectory(backupDirPath, false);
 
-    final List<ModInfo> disabledCoreCnsAddons = [];
-    disabledMods.removeWhere((mod) {
-      final name = p.basename(mod.directory.path).toLowerCase();
-      // Verificamos que sea el de CNS viendo que tenga el nexusId 1496
-      if ((name == 'animations' || name == 'cosmetics') && mod.nexusId == '1496') {
-        disabledCoreCnsAddons.add(mod);
-        return true;
-      }
-      return false;
-    });
-
-    return [...enabledCnsMods, ...enabledGenericMods, ...enabledLogicMods, ...disabledMods, ...coreCnsAddons, ...disabledCoreCnsAddons];
+    return [...enabledCnsMods, ...enabledGenericMods, ...enabledLogicMods, ...disabledMods];
   }
 
   static Future<int> runSelfHealing({

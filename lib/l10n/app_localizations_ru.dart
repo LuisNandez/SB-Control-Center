@@ -35,6 +35,20 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsAboutDesc => 'Информация о приложении';
 
   @override
+  String get settingsRefreshMetadata => 'Обновить метаданные';
+
+  @override
+  String get settingsRefreshMetadataDesc =>
+      'Повторно проверяет ваши моды на Nexus Mods и дополняет недостающие данные и изображения';
+
+  @override
+  String get metadataRefreshDone => 'Метаданные обновлены';
+
+  @override
+  String get metadataRefreshNoApiKey =>
+      'Укажите API-ключ Nexus Mods в настройках, чтобы обновить метаданные.';
+
+  @override
   String get settingsPathsAndTools => 'Пути и инструменты';
 
   @override
@@ -466,11 +480,18 @@ class AppLocalizationsRu extends AppLocalizations {
       'Выбор не содержит действительного .json файла мода.';
 
   @override
-  String get aboutTitle => 'О Центре управления CNS';
+  String get aboutTitle => 'О SB Control Center';
 
   @override
   String get aboutContent =>
-      'Это приложение - менеджер модов для Stellar Blade, разработанный для работы с Custom Nanosuit System (CNS).\n\nТребование: Для полной функциональности с файлами .rar и .7z на вашей системе должен быть установлен 7-Zip.';
+      'SB Control Center — менеджер модов для Stellar Blade. Он устанавливает, упорядочивает и обновляет ваши моды в одном месте и работает с Custom Nanosuit System (CNS) для модов костюмов и наносьюта.\n\nПриложение подключается к Nexus Mods, чтобы скачивать моды, проверять обновления и ставить Endorse используемым модам.\n\nТребование: для полной поддержки архивов .rar и .7z в системе должен быть установлен 7-Zip.';
+
+  @override
+  String get aboutEndorseCta =>
+      'Нравится приложение? Endorse на Nexus Mods очень помогает.';
+
+  @override
+  String get aboutEndorseThanks => 'Спасибо за вашу поддержку!';
 
   @override
   String get aboutLinkText => 'Посетите мой профиль создателя';
@@ -927,6 +948,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get translateDescription => 'Перевести описание';
 
   @override
+  String get restoreOriginalDescription => 'Восстановить исходное описание';
+
+  @override
   String get dialogTitleUE4SSReinstall => 'Переустановить UE4SS';
 
   @override
@@ -1089,6 +1113,53 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get devExtractAction => 'Извлечь';
+
+  @override
+  String get devTestSelfUpdateTitle => 'Тест самообновления';
+
+  @override
+  String get devTestSelfUpdateDesc =>
+      'Выберите .zip-пакет приложения и установите его поверх этого приложения — так же, как это сделает автоматическое обновление.';
+
+  @override
+  String get devSelfUpdateUnsupported =>
+      'Самообновление доступно только в Windows.';
+
+  @override
+  String get devSelfUpdatePickTitle => 'Выберите .zip-файл SB Control Center';
+
+  @override
+  String get devSelfUpdateFailed => 'Не удалось установить обновление';
+
+  @override
+  String get devSelfUpdateDryRunTitle => 'Пакет корректен (тестовый режим)';
+
+  @override
+  String devSelfUpdateDryRunDesc(int count) {
+    return 'Найдено файлов: $count. Установка не выполнялась, так как это не релизная сборка.';
+  }
+
+  @override
+  String get devSelfUpdateConfirmTitle => 'Установить обновление?';
+
+  @override
+  String get devSelfUpdateConfirmDesc =>
+      'Приложение закроется, заменит свои файлы файлами из пакета и автоматически запустится снова.';
+
+  @override
+  String get devSelfUpdateInstallAction => 'Установить и перезапустить';
+
+  @override
+  String get devSelfUpdateProgressTitle => 'Обновление SB Control Center';
+
+  @override
+  String get devSelfUpdateExtracting => 'Распаковка пакета…';
+
+  @override
+  String get devSelfUpdateInstalling => 'Установка файлов…';
+
+  @override
+  String get devSelfUpdateRestarting => 'Перезапуск…';
 
   @override
   String get devExtractNoData =>
@@ -2096,8 +2167,13 @@ class AppLocalizationsRu extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          '$count mods disabled: they replace outfits already used by other mods',
-      one: '1 mod disabled: it replaces an outfit already used by another mod',
+          '$count мода отключено: они заменяют костюмы, которые уже используются другими модами',
+      many:
+          '$count модов отключено: они заменяют костюмы, которые уже используются другими модами',
+      few:
+          '$count мода отключены: они заменяют костюмы, которые уже используются другими модами',
+      one:
+          '$count мод отключён: он заменяет костюм, который уже используется другим модом',
     );
     return '$_temp0';
   }
@@ -2220,7 +2296,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get nexusPlanPremium => 'Premium';
 
   @override
-  String get nexusPlanStandard => 'Стандартный';
+  String get nexusPlanMember => 'Участник';
+
+  @override
+  String get nexusPlanSupporter => 'Сторонник';
 
   @override
   String get nexusApiRequestsRemaining => 'ОСТАВШИЕСЯ ЗАПРОСЫ API';
@@ -2232,8 +2311,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get nexusApiHourly => 'В час';
 
   @override
-  String get downloadFreeAccountLimit =>
-      'Бесплатные аккаунты ограничены Nexus Mods до 3 МБ/с';
+  String get downloadMemberAccountLimit =>
+      'Аккаунты «Участник» ограничены Nexus Mods до 1,5 МБ/с';
+
+  @override
+  String get downloadSupporterAccountLimit =>
+      'Аккаунты «Сторонник» ограничены Nexus Mods до 3 МБ/с';
 
   @override
   String get downloadRetryTooltip => 'Повторить';
@@ -2270,4 +2353,31 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get downloadResuming => 'Возобновление...';
+
+  @override
+  String get apiKeyPromptTitle => 'Настройте ключ API Nexus Mods';
+
+  @override
+  String get apiKeyPromptMessage =>
+      'Ключ API не обнаружен. Настройка необязательна, но рекомендуется для удобства: с ним можно проверять обновления модов, скачивать в один клик (nxm://) и загружать обложки и информацию с Nexus Mods.';
+
+  @override
+  String get apiKeyPromptConfigure => 'Настроить ключ API';
+
+  @override
+  String get apiKeyPromptSkip => 'Пропустить';
+
+  @override
+  String get apiKeyPromptDontShowAgain => 'Больше не показывать это сообщение';
+
+  @override
+  String get adjustCoverTooltip => 'Настроить обложку';
+
+  @override
+  String get noCoverToAdjust => 'У этого мода нет обложки для настройки';
+
+  @override
+  String errorAdjustingCoverText(Object error) {
+    return 'Ошибка при настройке обложки: $error';
+  }
 }

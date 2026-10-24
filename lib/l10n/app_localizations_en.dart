@@ -35,6 +35,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAboutDesc => 'Information about the application';
 
   @override
+  String get settingsRefreshMetadata => 'Update metadata';
+
+  @override
+  String get settingsRefreshMetadataDesc =>
+      'Checks your mods again on Nexus Mods and completes missing details and images';
+
+  @override
+  String get metadataRefreshDone => 'Metadata updated';
+
+  @override
+  String get metadataRefreshNoApiKey =>
+      'Add your Nexus Mods API key in Settings to update metadata.';
+
+  @override
   String get settingsPathsAndTools => 'Paths & Tools';
 
   @override
@@ -471,11 +485,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'The selection does not contain a valid mod .json file.';
 
   @override
-  String get aboutTitle => 'About CNS Control Center';
+  String get aboutTitle => 'About SB Control Center';
 
   @override
   String get aboutContent =>
-      'This application is a mod manager for Stellar Blade, designed to work with the Custom Nanosuit System (CNS).\n\nRequirement: For full functionality with .rar and .7z files, 7-Zip must be installed on your system.';
+      'SB Control Center is a mod manager for Stellar Blade. It installs, organizes, and updates your mods in one place, and works with the Custom Nanosuit System (CNS) for outfit and nanosuit mods.\n\nIt connects to Nexus Mods to download, check for updates, and endorse the mods you use.\n\nRequirement: for full support of .rar and .7z archives, 7-Zip must be installed on your system.';
+
+  @override
+  String get aboutEndorseCta =>
+      'Enjoying the app? An Endorse on Nexus Mods helps a lot.';
+
+  @override
+  String get aboutEndorseThanks => 'Thank you for your support!';
 
   @override
   String get aboutLinkText => 'Visit my creator profile';
@@ -929,6 +950,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translateDescription => 'Translate description';
 
   @override
+  String get restoreOriginalDescription => 'Restore original description';
+
+  @override
   String get dialogTitleUE4SSReinstall => 'Reinstall UE4SS';
 
   @override
@@ -1091,6 +1115,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get devExtractAction => 'Extract';
+
+  @override
+  String get devTestSelfUpdateTitle => 'Test self-update';
+
+  @override
+  String get devTestSelfUpdateDesc =>
+      'Pick the app\'s .zip package and install it over this app, as the automatic update will do.';
+
+  @override
+  String get devSelfUpdateUnsupported =>
+      'Self-update is only available on Windows.';
+
+  @override
+  String get devSelfUpdatePickTitle => 'Select the SB Control Center .zip';
+
+  @override
+  String get devSelfUpdateFailed => 'Could not install the update';
+
+  @override
+  String get devSelfUpdateDryRunTitle => 'Package is valid (test mode)';
+
+  @override
+  String devSelfUpdateDryRunDesc(int count) {
+    return '$count files found. It was not installed because this is not a release build.';
+  }
+
+  @override
+  String get devSelfUpdateConfirmTitle => 'Install update?';
+
+  @override
+  String get devSelfUpdateConfirmDesc =>
+      'The app will close, replace its files with the ones from the package and open again automatically.';
+
+  @override
+  String get devSelfUpdateInstallAction => 'Install and restart';
+
+  @override
+  String get devSelfUpdateProgressTitle => 'Updating SB Control Center';
+
+  @override
+  String get devSelfUpdateExtracting => 'Extracting package…';
+
+  @override
+  String get devSelfUpdateInstalling => 'Installing files…';
+
+  @override
+  String get devSelfUpdateRestarting => 'Restarting…';
 
   @override
   String get devExtractNoData =>
@@ -2215,7 +2286,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nexusPlanPremium => 'Premium';
 
   @override
-  String get nexusPlanStandard => 'Standard';
+  String get nexusPlanMember => 'Member';
+
+  @override
+  String get nexusPlanSupporter => 'Supporter';
 
   @override
   String get nexusApiRequestsRemaining => 'REMAINING API REQUESTS';
@@ -2227,8 +2301,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nexusApiHourly => 'Hourly';
 
   @override
-  String get downloadFreeAccountLimit =>
-      'Free accounts are limited to 3 MB/s by Nexus Mods';
+  String get downloadMemberAccountLimit =>
+      'Member accounts are limited to 1.5 MB/s by Nexus Mods';
+
+  @override
+  String get downloadSupporterAccountLimit =>
+      'Supporter accounts are limited to 3 MB/s by Nexus Mods';
 
   @override
   String get downloadRetryTooltip => 'Retry';
@@ -2266,4 +2344,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloadResuming => 'Resuming...';
+
+  @override
+  String get apiKeyPromptTitle => 'Set up your Nexus Mods API key';
+
+  @override
+  String get apiKeyPromptMessage =>
+      'No API key was detected. Setting it up is optional, but recommended for convenience: it lets you check for mod updates, download with one click (nxm://) and load covers and info from Nexus Mods.';
+
+  @override
+  String get apiKeyPromptConfigure => 'Set up API key';
+
+  @override
+  String get apiKeyPromptSkip => 'Skip';
+
+  @override
+  String get apiKeyPromptDontShowAgain => 'Don\'t show this message again';
+
+  @override
+  String get adjustCoverTooltip => 'Adjust cover';
+
+  @override
+  String get noCoverToAdjust => 'This mod has no cover to adjust';
+
+  @override
+  String errorAdjustingCoverText(Object error) {
+    return 'Error adjusting the cover: $error';
+  }
 }

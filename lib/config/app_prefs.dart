@@ -13,4 +13,7 @@ class AppPrefs {
   static const String showModTypeTags = 'showModTypeTags';
   /// Asignación automática de trajes al instalar mods de reemplazo (por defecto: activada).
   static const String autoAssignOutfits = 'autoAssignOutfits';
+  /// El usuario marcó "No volver a mostrar este mensaje" en el aviso que
+  /// invita a configurar la API key de Nexus al abrir la app.
+  static const String hideApiKeyPrompt = 'hideApiKeyPrompt';
 }

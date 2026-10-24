@@ -248,7 +248,10 @@ class _ModThumbnailImageState extends State<ModThumbnailImage> {
 class CropOverlayPainter extends CustomPainter {
   final Rect cropRect;
 
-  CropOverlayPainter({required this.cropRect});
+  /// Radio de las esquinas superiores del marco (0 = recto).
+  final double topRadius;
+
+  CropOverlayPainter({required this.cropRect, this.topRadius = 0});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -258,18 +261,26 @@ class CropOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
 
+    final frame = RRect.fromRectAndCorners(
+      cropRect,
+      topLeft: Radius.circular(topRadius),
+      topRight: Radius.circular(topRadius),
+    );
+
     final backgroundPath = Path.combine(
       PathOperation.difference,
       Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-      Path()..addRect(cropRect),
+      Path()..addRRect(frame),
     );
     canvas.drawPath(backgroundPath, backgroundPaint);
 
-    canvas.drawRect(cropRect, borderPaint);
+    canvas.drawRRect(frame, borderPaint);
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
+    return oldDelegate is! CropOverlayPainter ||
+        oldDelegate.cropRect != cropRect ||
+        oldDelegate.topRadius != topRadius;
   }
 }

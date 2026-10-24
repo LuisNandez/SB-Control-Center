@@ -35,6 +35,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAboutDesc => '有关应用程序的信息';
 
   @override
+  String get settingsRefreshMetadata => '更新元数据';
+
+  @override
+  String get settingsRefreshMetadataDesc =>
+      '重新在 Nexus Mods 上检查你的模组，并补全缺失的信息和图片';
+
+  @override
+  String get metadataRefreshDone => '元数据已更新';
+
+  @override
+  String get metadataRefreshNoApiKey => '请在设置中填写 Nexus Mods API 密钥以更新元数据。';
+
+  @override
   String get settingsPathsAndTools => '路径与工具';
 
   @override
@@ -446,11 +459,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorNoJsonInSelection => '所选内容不包含有效的模组 .json 文件。';
 
   @override
-  String get aboutTitle => '关于 CNS 控制中心';
+  String get aboutTitle => '关于 SB Control Center';
 
   @override
   String get aboutContent =>
-      '此应用程序是《星刃》的模组管理器，旨在与自定义纳米服系统（CNS）配合使用。\n\n要求：要获得对 .rar 和 .7z 文件的完整功能，您的系统上必须安装 7-Zip。';
+      'SB Control Center 是《Stellar Blade》的模组管理器。它可以在一处安装、整理和更新你的模组，并支持用于服装和纳米战衣模组的 Custom Nanosuit System (CNS)。\n\n它会连接 Nexus Mods，用于下载、检查更新，以及为你使用的模组点 Endorse。\n\n要求：要完整支持 .rar 和 .7z 压缩包，系统中需要安装 7-Zip。';
+
+  @override
+  String get aboutEndorseCta => '喜欢这个应用吗？在 Nexus Mods 上点个 Endorse 会帮上大忙。';
+
+  @override
+  String get aboutEndorseThanks => '感谢你的支持！';
 
   @override
   String get aboutLinkText => '访问我的创作者个人资料';
@@ -902,6 +921,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get translateDescription => '翻译描述';
 
   @override
+  String get restoreOriginalDescription => '恢复原始描述';
+
+  @override
   String get dialogTitleUE4SSReinstall => '重新安装 UE4SS';
 
   @override
@@ -1060,6 +1082,51 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get devExtractAction => '提取';
+
+  @override
+  String get devTestSelfUpdateTitle => '测试自动安装';
+
+  @override
+  String get devTestSelfUpdateDesc =>
+      '选择应用的 .zip 安装包，并将其覆盖安装到当前应用上，与自动更新的方式相同。';
+
+  @override
+  String get devSelfUpdateUnsupported => '自动更新仅在 Windows 上可用。';
+
+  @override
+  String get devSelfUpdatePickTitle => '选择 SB Control Center 的 .zip 文件';
+
+  @override
+  String get devSelfUpdateFailed => '无法安装更新';
+
+  @override
+  String get devSelfUpdateDryRunTitle => '安装包有效（测试模式）';
+
+  @override
+  String devSelfUpdateDryRunDesc(int count) {
+    return '找到 $count 个文件。由于这不是发布版本，因此未进行安装。';
+  }
+
+  @override
+  String get devSelfUpdateConfirmTitle => '是否安装更新？';
+
+  @override
+  String get devSelfUpdateConfirmDesc => '应用将关闭，用安装包中的文件替换自身文件，然后自动重新打开。';
+
+  @override
+  String get devSelfUpdateInstallAction => '安装并重启';
+
+  @override
+  String get devSelfUpdateProgressTitle => '正在更新 SB Control Center';
+
+  @override
+  String get devSelfUpdateExtracting => '正在解压安装包…';
+
+  @override
+  String get devSelfUpdateInstalling => '正在安装文件…';
+
+  @override
+  String get devSelfUpdateRestarting => '正在重启…';
 
   @override
   String get devExtractNoData => '未找到具有有效标识符的模组可供提取。';
@@ -2020,9 +2087,8 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other:
-          '$count mods disabled: they replace outfits already used by other mods',
-      one: '1 mod disabled: it replaces an outfit already used by another mod',
+      other: '已关闭 $count 个模组：它们替换了其他模组已在使用的服装',
+      one: '已关闭 1 个模组：它替换了另一个模组已在使用的服装',
     );
     return '$_temp0';
   }
@@ -2143,7 +2209,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get nexusPlanPremium => 'Premium';
 
   @override
-  String get nexusPlanStandard => '标准';
+  String get nexusPlanMember => '会员';
+
+  @override
+  String get nexusPlanSupporter => '支持者';
 
   @override
   String get nexusApiRequestsRemaining => '剩余 API 请求';
@@ -2155,7 +2224,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get nexusApiHourly => '每小时';
 
   @override
-  String get downloadFreeAccountLimit => 'Nexus Mods 将免费账户限速为 3 MB/s';
+  String get downloadMemberAccountLimit => 'Nexus Mods 将会员账户限速为 1.5 MB/s';
+
+  @override
+  String get downloadSupporterAccountLimit => 'Nexus Mods 将支持者账户限速为 3 MB/s';
 
   @override
   String get downloadRetryTooltip => '重试';
@@ -2190,4 +2262,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get downloadResuming => '正在恢复...';
+
+  @override
+  String get apiKeyPromptTitle => '设置你的 Nexus Mods API 密钥';
+
+  @override
+  String get apiKeyPromptMessage =>
+      '未检测到 API 密钥。设置是可选的，但为了方便起见建议配置：它可让你检查模组更新、一键下载 (nxm://)，并加载 Nexus Mods 的封面和信息。';
+
+  @override
+  String get apiKeyPromptConfigure => '设置 API 密钥';
+
+  @override
+  String get apiKeyPromptSkip => '跳过';
+
+  @override
+  String get apiKeyPromptDontShowAgain => '不再显示此消息';
+
+  @override
+  String get adjustCoverTooltip => '调整封面';
+
+  @override
+  String get noCoverToAdjust => '此模组没有可调整的封面';
+
+  @override
+  String errorAdjustingCoverText(Object error) {
+    return '调整封面时出错：$error';
+  }
 }

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import '../l10n/app_localizations.dart';
+import '../models/nexus_plan.dart';
 import 'nexus_api_service.dart';
 import 'download_service.dart';
 
@@ -74,12 +75,13 @@ class DownloadManager extends ChangeNotifier {
       if (activeDownloads.remove(task)) notifyListeners();
     });
   }
-  bool _isUserPremium = false;
-  bool get isUserPremium => _isUserPremium;
+  NexusPlan _userPlan = NexusPlan.member;
+  NexusPlan get userPlan => _userPlan;
+  bool get isUserPremium => _userPlan.isPremium;
 
-  set isUserPremium(bool value) {
-    if (_isUserPremium != value) {
-      _isUserPremium = value;
+  set userPlan(NexusPlan value) {
+    if (_userPlan != value) {
+      _userPlan = value;
       notifyListeners(); // Actualiza la UI de descargas automáticamente
     }
   }
@@ -116,13 +118,56 @@ class DownloadManager extends ChangeNotifier {
     );
   }
 
+  /// Resuelve el nxm:// a sus mirrors. Si falla, deja la tarea en error con el
+  /// motivo real y devuelve null.
+  Future<NxmDownloadInfo?> _resolveLink(
+      DownloadTask task, String apiKey, String linkErrorText) async {
+    try {
+      return await NexusApiService.resolveNxmDownload(task.nxmUrl, apiKey);
+    } on NxmLinkException catch (e) {
+      DownloadLog.write('[${task.id}] Link resolution failed: $e');
+      if (task.status == DownloadStatus.cancelled ||
+          task.status == DownloadStatus.paused) {
+        return null;
+      }
+      _updateTaskError(task, _linkFailureText(task, e, linkErrorText));
+      return null;
+    }
+  }
+
+  String _linkFailureText(
+      DownloadTask task, NxmLinkException e, String fallback) {
+    if (e.kind == NxmLinkFailureKind.network) return task.l10n.downloadNoInternet;
+    if (e.kind == NxmLinkFailureKind.forbidden) {
+      return task.l10n.downloadErrorLinkExpired(403);
+    }
+    if (e.kind == NxmLinkFailureKind.unauthorized ||
+        e.kind == NxmLinkFailureKind.notFound ||
+        e.kind == NxmLinkFailureKind.rateLimited ||
+        e.kind == NxmLinkFailureKind.server) {
+      return task.l10n.downloadErrorHttp(e.statusCode ?? 0);
+    }
+    return fallback;
+  }
+
+  /// Mensaje visible: el genérico localizado + un motivo técnico corto
+  /// (host inaccesible, TLS, disco...) para que el problema sea diagnosticable.
+  String _downloadFailureText(
+      DownloadTask task, DownloadFailure f, String generic) {
+    if (f.kind == DownloadFailureKind.http && f.statusCode != null) {
+      return task.l10n.downloadErrorHttp(f.statusCode!);
+    }
+    final label = f.shortLabel;
+    return label.isEmpty ? generic : '$generic · $label';
+  }
+
   Future<void> _executeDownloadFlow({
     required DownloadTask task,
     required String apiKey,
     required String linkErrorText,
     required String downloadErrorText,
     required Function(File, String, String) onComplete,
-    bool isRetry = false, 
+    bool isRetry = false,
   }) async {
     try {
       if (isRetry) {
@@ -131,43 +176,54 @@ class DownloadManager extends ChangeNotifier {
         notifyListeners();
       }
 
-      final linkData = await NexusApiService.getDownloadLinkFromNxm(task.nxmUrl, apiKey);
-      if (linkData == null) {
-        _updateTaskError(task, linkErrorText);
+      final info = await _resolveLink(task, apiKey, linkErrorText);
+      if (info == null) return;
+      if (task.status == DownloadStatus.cancelled ||
+          task.status == DownloadStatus.paused) {
         return;
       }
 
-      if (!isRetry) {
-        String finalFileName = linkData['fileName']!;
-        final String extractedModId = linkData['modId']!;
-        final String extractedVersion = linkData['version']!;
+      // Primera vez, o un reintento de una tarea que falló antes de preparar
+      // el archivo (antes esto provocaba un error de null en el reintento).
+      if (!isRetry || task.targetFile == null) {
+        final dir = await DownloadService.prepareDownloadDir();
 
-        if (!finalFileName.contains('-$extractedModId-')) {
+        String finalFileName = info.fileName;
+        if (!finalFileName.contains('-${info.modId}-')) {
           final ext = p.extension(finalFileName);
           final nameWithoutExt = p.basenameWithoutExtension(finalFileName);
-          final safeVersion = extractedVersion.replaceAll('.', '-');
-          finalFileName = '$nameWithoutExt-$extractedModId-$safeVersion-0$ext';
+          final safeVersion = info.version.replaceAll('.', '-');
+          finalFileName = '$nameWithoutExt-${info.modId}-$safeVersion-0$ext';
         }
+        finalFileName =
+            DownloadService.safeFileName(finalFileName, dirLength: dir.path.length);
 
         task.fileName = finalFileName;
-        task.modId = extractedModId;
-        task.version = extractedVersion;
+        task.modId = info.modId;
+        task.version = info.version;
 
-        // NUEVO: Crear un directorio temporal estable para evitar perder el progreso
-        final tempDir = Directory(p.join(Directory.systemTemp.path, 'sb_control_downloads'));
-        if (!await tempDir.exists()) await tempDir.create(recursive: true);
-        
-        task.targetFile = File(p.join(tempDir.path, task.fileName));
+        final target = File(p.join(dir.path, finalFileName));
+        // Un resto de un intento anterior podría estar corrupto: empezar limpio.
+        try {
+          if (await target.exists()) await target.delete();
+        } catch (_) {}
+        task.targetFile = target;
       }
 
       task.status = DownloadStatus.downloading;
       notifyListeners();
 
-      // NUEVO: Pasamos task.targetFile! en lugar de solo el nombre
-      final downloadedFile = await DownloadService.downloadFile(
-        url: linkData['url']!,
+      final downloadedFile = await DownloadService.downloadWithFallback(
+        urls: info.urls,
         targetFile: task.targetFile!,
         controller: task.controller,
+        expectedBytes: info.sizeBytes,
+        logTag: task.id,
+        onStatus: (status) {
+          if (task.status != DownloadStatus.downloading) return;
+          task.speed = status;
+          notifyListeners();
+        },
         onProgress: (progress, speed, downloadedStr) {
           if (task.status == DownloadStatus.cancelled) return;
           task.progress = progress;
@@ -195,30 +251,26 @@ class DownloadManager extends ChangeNotifier {
       }
     } catch (e) {
       if (task.status == DownloadStatus.cancelled || task.status == DownloadStatus.paused) return;
-      final errorStr = e.toString().toLowerCase();
-      final isNetworkError = errorStr.contains('socketexception') ||
-                             errorStr.contains('timeout') ||
-                             errorStr.contains('software caused connection abort');
+      DownloadLog.write('[${task.id}] Download error: $e');
 
       if (e is ExpiredLinkException && !isRetry) {
-        print("Enlace expirado detectado. Solicitando uno nuevo a la API...");
+        // Enlace caducado: se pide uno nuevo a la API y se vuelve a intentar.
         await _executeDownloadFlow(
           task: task,
           apiKey: apiKey,
           linkErrorText: linkErrorText,
           downloadErrorText: downloadErrorText,
           onComplete: onComplete,
-          isRetry: true, 
+          isRetry: true,
         );
-      } else if (isNetworkError) {
-        // Muestra el botón de Reintentar con un mensaje claro si se cortó el internet
-        _updateTaskError(task, task.l10n.downloadNoInternet);
       } else if (e is ExpiredLinkException) {
         _updateTaskError(task, task.l10n.downloadErrorLinkExpired(e.statusCode ?? 0));
       } else if (e is HttpStatusException) {
         _updateTaskError(task, task.l10n.downloadErrorHttp(e.statusCode));
+      } else if (e is DownloadFailure) {
+        _updateTaskError(task, _downloadFailureText(task, e, downloadErrorText));
       } else {
-        _updateTaskError(task, e.toString());
+        _updateTaskError(task, downloadErrorText);
       }
     }
   }

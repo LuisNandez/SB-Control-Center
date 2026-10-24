@@ -21,6 +21,7 @@ class ModListTile extends StatelessWidget {
   final VoidCallback onDeleteTap;
   final VoidCallback onUpdateAvailableTap;
   final VoidCallback onEditNameTap;
+  final VoidCallback onAdjustCoverTap;
   final VoidCallback onShowFolderTap;
   final VoidCallback onShowGalleryTap;
   final VoidCallback onOpenNexusTap;
@@ -40,6 +41,7 @@ class ModListTile extends StatelessWidget {
     required this.onDeleteTap,
     required this.onUpdateAvailableTap,
     required this.onEditNameTap,
+    required this.onAdjustCoverTap,
     required this.onShowFolderTap,
     required this.onShowGalleryTap,
     required this.onOpenNexusTap,
@@ -218,6 +220,11 @@ class ModListTile extends StatelessWidget {
             icon: HugeIcons.strokeRoundedEdit01,
             tooltip: l10n.editModNameTooltip,
             onPressed: isLoading ? null : onEditNameTap,
+          ),
+          _action(
+            icon: HugeIcons.strokeRoundedCrop,
+            tooltip: l10n.adjustCoverTooltip,
+            onPressed: isLoading ? null : onAdjustCoverTap,
           ),
           _action(
             icon: HugeIcons.strokeRoundedFolderInput,

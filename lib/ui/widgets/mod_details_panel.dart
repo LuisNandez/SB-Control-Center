@@ -6,12 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:translator/translator.dart';
 import 'package:hugeicons/hugeicons.dart';
 
 import '../../models/mod_info.dart';
 import '../../services/endorse_info_store.dart';
 import '../../services/nexus_api_service.dart';
+import '../../services/translation_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../thumbnail_service.dart';
 import '../../notification_service.dart';
@@ -31,10 +31,13 @@ class ModDetailsPanel extends StatefulWidget {
   // Funciones que necesita del widget principal
   final Future<ModInfo?> Function(ModInfo, Map<String, dynamic>)
   onUpdateDetails;
-  final Future<void> Function(Directory) onShowInExplorer;
+  final Future<void> Function(ModInfo) onShowInExplorer;
   final void Function(ModInfo) onShowImageGallery;
   final Future<Map<String, dynamic>?> Function(ModInfo, BuildContext)
   onShowGeneralEditDialog;
+  /// Abre el ajuste de la portada actual del mod (la de Nexus o la
+  /// personalizada) y devuelve el mod actualizado, o null si se cancela.
+  final Future<ModInfo?> Function(ModInfo) onAdjustCover;
   final Function(ModInfo?) onPanelClosed;
   // Información de la actualización disponible.
   final Map<String, dynamic>? updateInfo;
@@ -63,6 +66,7 @@ class ModDetailsPanel extends StatefulWidget {
     required this.onShowInExplorer,
     required this.onShowImageGallery,
     required this.onShowGeneralEditDialog,
+    required this.onAdjustCover,
     required this.onPanelClosed,
     this.updateInfo,
     required this.isIgnored,
@@ -104,15 +108,6 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   /// resultado.
   int _endorseActionSeq = 0;
 
-  /// Minutos que faltan para poder endorsar (0 = ya se puede). Es un notifier
-  /// para que la cuenta atrás solo repinte el botón y no todo el panel.
-  final ValueNotifier<int> _endorseWaitMinutes = ValueNotifier<int>(0);
-  Timer? _endorseWaitTimer;
-
-  /// Espera forzada si Nexus responde TOO_SOON_AFTER_DOWNLOAD aunque la fecha
-  /// de instalación local ya haya pasado los 15 minutos.
-  DateTime? _endorseBlockedUntil;
-
   /// Se incrementa si falla un guardado, para recrear las tarjetas de trajes
   /// que se habían "colapsado" visualmente antes de confirmarse.
   int _outfitsRevision = 0;
@@ -152,7 +147,6 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                 currentModInfo.replacesOutfits!.isNotEmpty));
     // La comprobación de traducción (peticiones de red + setState) se lanza en
     // _markContentReady, cuando ya terminó la animación de apertura.
-    _refreshEndorseWait();
     _endorseRestore = _restoreEndorseStatus();
   }
 
@@ -213,8 +207,6 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   void dispose() {
     _routeAnimation?.removeStatusListener(_onRouteStatus);
     _readyFallback?.cancel();
-    _endorseWaitTimer?.cancel();
-    _endorseWaitMinutes.dispose();
     widget.onPanelClosed(_needsReloadOnClose ? currentModInfo : null);
     _wheelSmoother.cancel();
     _carouselScrollController.dispose();
@@ -227,27 +219,13 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   // ---------------------------------------------------------------------------
   Future<bool> _checkIfTextNeedsTranslation(String? text) async {
     if (!mounted) return false;
-    if (text == null || text.trim().isEmpty) {
-      return false;
-    }
-
-    final String currentLocale = Localizations.localeOf(context).languageCode;
-    try {
-      final translator = GoogleTranslator();
-      // Usamos un fragmento para no enviar textos enormes a la API de detección
-      final snippet = text.length > 150 ? text.substring(0, 150) : text;
-      const String pivotLocale = 'de'; // Idioma pivote para forzar la detección
-      final translation = await translator.translate(snippet, to: pivotLocale);
-      final detectedLanguageCode = translation.sourceLanguage.code
-          .toLowerCase();
-
-      // Necesita traducción si el idioma detectado no es el de la app y no es "auto"
-      return detectedLanguageCode != currentLocale &&
-          detectedLanguageCode != 'auto';
-    } catch (e) {
-      print("Error detectando el idioma: $e");
-      return false;
-    }
+    if (text == null || text.trim().isEmpty) return false;
+    // Compara el idioma detectado con el de la app (válido para todos los
+    // idiomas: 'zh-CN' == 'zh', 'pt-BR' == 'pt', etc.).
+    return TranslationService.instance.needsTranslation(
+      text,
+      Localizations.localeOf(context),
+    );
   }
 
   /// Comprueba ambos campos (resumen y descripción) y actualiza la visibilidad de sus botones.
@@ -288,6 +266,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   // Traduce el resumen
   Future<void> _translateSummary() async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context);
     if (currentModInfo.summary == null ||
         currentModInfo.summary!.trim().isEmpty)
       return;
@@ -295,17 +274,14 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     setState(() => _isTranslating = true);
 
     try {
-      final translator = GoogleTranslator();
-      final currentLocale = Localizations.localeOf(context).languageCode;
-      final translation = await translator.translate(
-        TextUtils.stripHtml(currentModInfo.summary!),
-        from: 'auto',
-        to: currentLocale,
+      final translated = await TranslationService.instance.translatePlain(
+        currentModInfo.summary!,
+        locale,
       );
 
       // Se guarda en el campo personalizado ('summary' → 'customSummary' en onUpdateDetails).
       final updatedMod = await widget.onUpdateDetails(currentModInfo, {
-        'summary': translation.text,
+        'summary': translated,
       });
 
       if (updatedMod != null && mounted) {
@@ -330,6 +306,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   // Traduce la descripción
   Future<void> _translateDescription() async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context);
     if (currentModInfo.description == null ||
         currentModInfo.description!.trim().isEmpty)
       return;
@@ -337,16 +314,15 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     setState(() => _isTranslating = true);
 
     try {
-      final translator = GoogleTranslator();
-      final currentLocale = Localizations.localeOf(context).languageCode;
-      final translation = await translator.translate(
-        TextUtils.stripHtml(currentModInfo.description!), // Limpiamos el HTML
-        from: 'auto',
-        to: currentLocale,
+      // Se traduce solo el texto: imágenes, enlaces, listas y formato BBCode
+      // se conservan tal cual para que la descripción se siga viendo igual.
+      final translated = await TranslationService.instance.translateBBCode(
+        currentModInfo.description!,
+        locale,
       );
 
       final updatedMod = await widget.onUpdateDetails(currentModInfo, {
-        'customDescription': translation.text,
+        'customDescription': translated,
       });
 
       if (updatedMod != null && mounted) {
@@ -361,6 +337,36 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
         context: context,
         type: NotificationType.error,
         title: l10n.errorTranslation,
+        description: e.toString(),
+      );
+    } finally {
+      if (mounted) setState(() => _isTranslating = false);
+    }
+  }
+
+  /// Quita la descripción personalizada (traducida o editada) y vuelve a
+  /// mostrar la original de Nexus.
+  Future<void> _restoreOriginalDescription() async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _isTranslating = true);
+    try {
+      // Una cadena vacía hace que onUpdateDetails elimine 'customDescription'.
+      final updatedMod = await widget.onUpdateDetails(currentModInfo, {
+        'customDescription': '',
+      });
+      if (updatedMod != null && mounted) {
+        setState(() {
+          currentModInfo = updatedMod;
+          _needsReloadOnClose = true;
+        });
+        // Vuelve a comprobar si la original necesita traducción.
+        _updateTranslationButtonVisibility();
+      }
+    } catch (e) {
+      NotificationService.instance.show(
+        context: context,
+        type: NotificationType.error,
+        title: l10n.errorSavingChanges,
         description: e.toString(),
       );
     } finally {
@@ -396,7 +402,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
 
   /// Etiqueta y color del tipo de mod (mismos que en las tarjetas de la lista).
   (String, Color) _typeInfo(AppLocalizations l10n) {
-    switch (currentModInfo.modType) {
+    switch (currentModInfo.displayType) {
       case 'replacement':
         return (l10n.modTypeReplacement, IosColors.purple);
       case 'genericPak':
@@ -578,7 +584,17 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       context,
     );
     if (updatedData == null) return;
-    await _saveField(updatedData);
+    final bool adjustCover = updatedData.remove('adjustCover') == true;
+    if (updatedData.isNotEmpty) await _saveField(updatedData);
+    if (adjustCover && mounted) {
+      final updatedMod = await widget.onAdjustCover(currentModInfo);
+      if (updatedMod != null && mounted) {
+        setState(() {
+          currentModInfo = updatedMod;
+          _needsReloadOnClose = true;
+        });
+      }
+    }
   }
 
   Future<void> _onLinkPressed() async {
@@ -601,51 +617,20 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   int _minutesCeil(Duration d) =>
       d <= Duration.zero ? 0 : (d.inSeconds / 60).ceil();
 
-  /// Tiempo que falta para poder endorsar. Se calcula desde la fecha de
-  /// instalación (siempre es posterior a la descarga, así que es una cota
-  /// segura) y desde una espera forzada por Nexus, si la hubo.
-  Duration _endorseWaitLeft() {
-    final DateTime now = DateTime.now();
-    Duration left = Duration.zero;
-
-    final DateTime? installed = currentModInfo.installDate;
-    if (installed != null) {
-      final Duration l = _endorseMinWait - now.difference(installed);
-      if (l > left) left = l;
-    }
-    final DateTime? blocked = _endorseBlockedUntil;
-    if (blocked != null) {
-      final Duration l = blocked.difference(now);
-      if (l > left) left = l;
-    }
-    return left > _endorseMinWait ? _endorseMinWait : left;
-  }
-
-  void _tickEndorseWait() {
-    final int minutes = _minutesCeil(_endorseWaitLeft());
-    if (_endorseWaitMinutes.value != minutes) {
-      _endorseWaitMinutes.value = minutes;
-    }
-    if (minutes <= 0) {
-      _endorseWaitTimer?.cancel();
-      _endorseWaitTimer = null;
-    }
-  }
-
-  /// Recalcula la espera y, si hay, programa la cuenta atrás.
-  void _refreshEndorseWait() {
-    _endorseWaitTimer?.cancel();
-    _endorseWaitTimer = null;
-    _tickEndorseWait();
-    if (_endorseWaitMinutes.value > 0 && _isNexusMod) {
-      _endorseWaitTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-        _tickEndorseWait();
-      });
-    }
+  /// Mensaje para TOO_SOON_AFTER_DOWNLOAD: explica el motivo y, si se puede, los
+  /// minutos que faltan. Se calculan con la fecha de la última descarga que da
+  /// Nexus (viewerDownloaded); si no hay, con la de instalación (posterior a la
+  /// descarga, así que es una cota segura); y si tampoco, con los 15 min enteros.
+  Future<String> _tooSoonText(AppLocalizations l10n) async {
+    final DateTime? downloaded = await NexusApiService.fetchViewerDownloadedAt(
+      currentModInfo.nexusId!,
+      widget.apiKey,
+    );
+    final DateTime? since = downloaded ?? currentModInfo.installDate;
+    final Duration left = since == null
+        ? _endorseMinWait
+        : _endorseMinWait - DateTime.now().difference(since);
+    return l10n.endorseErrWait(_minutesCeil(left).clamp(1, 15).toInt());
   }
 
   /// Carpetas de TODAS las ediciones instaladas de este mod (incluida la
@@ -709,8 +694,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       case EndorseFailure.notDownloaded:
         return l10n.endorseErrNotDownloaded;
       case EndorseFailure.tooSoon:
-        final int minutes = _minutesCeil(_endorseWaitLeft()).clamp(1, 15).toInt();
-        return l10n.endorseErrWait(minutes);
+        return l10n.endorseErrWait(_endorseMinWait.inMinutes);
       case EndorseFailure.ownMod:
         return l10n.endorseErrOwnMod;
       case EndorseFailure.rateLimited:
@@ -781,21 +765,12 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     }
 
     // 3. Si ya está endorsado, el botón lo quita (previa confirmación). Si no,
-    //    hay que respetar los 15 minutos desde la descarga.
+    //    se intenta endorsar siempre: si Nexus lo rechaza (p. ej. por los 15 min
+    //    tras la descarga) se avisa del motivo más abajo.
     final bool removing = _isEndorsed;
     if (removing) {
       final bool confirmed = await _confirmRemoveEndorse(l10n);
       if (!confirmed || !mounted) return;
-    } else {
-      final int wait = _minutesCeil(_endorseWaitLeft());
-      if (wait > 0) {
-        _endorseNotify(
-          NotificationType.info,
-          l10n.endorseFailedTitle,
-          l10n.endorseErrWait(wait),
-        );
-        return;
-      }
     }
 
     _endorseActionSeq++;
@@ -837,16 +812,11 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     }
 
     final EndorseFailure failure = result.failure ?? EndorseFailure.unknown;
-    if (failure == EndorseFailure.tooSoon) {
-      // Nexus manda: se bloquea el botón y se muestra la cuenta atrás.
-      _endorseBlockedUntil = DateTime.now().add(_endorseMinWait);
-      _refreshEndorseWait();
-    }
-    _endorseNotify(
-      NotificationType.error,
-      l10n.endorseFailedTitle,
-      _endorseFailureText(l10n, failure),
-    );
+    final String reason = failure == EndorseFailure.tooSoon
+        ? await _tooSoonText(l10n)
+        : _endorseFailureText(l10n, failure);
+    if (!mounted) return;
+    _endorseNotify(NotificationType.error, l10n.endorseFailedTitle, reason);
   }
 
   // ---------------------------------------------------------------------------
@@ -966,6 +936,20 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       tooltip: tooltip,
       onPressed: onPressed,
       icon: const Icon(Icons.translate_rounded, size: 17, color: IosColors.blue),
+    );
+  }
+
+  Widget _restoreAction({
+    required VoidCallback onPressed,
+    required String tooltip,
+  }) {
+    if (_isTranslating) return const SizedBox.shrink();
+    return IosToolbarButton(
+      width: 28,
+      height: 28,
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: const Icon(Icons.restore_rounded, size: 17, color: IosColors.blue),
     );
   }
 
@@ -1105,6 +1089,9 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     final String? raw = currentModInfo.customDescription ??
         currentModInfo.description;
     final bool hasDescription = raw != null && raw.trim().isNotEmpty;
+    final bool hasCustomDescription =
+        currentModInfo.customDescription != null &&
+        currentModInfo.customDescription!.trim().isNotEmpty;
 
     return IosGroup(
       title: l10n.modDescription,
@@ -1114,6 +1101,11 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
         size: 15,
       ),
       actions: [
+        if (hasCustomDescription)
+          _restoreAction(
+            onPressed: _restoreOriginalDescription,
+            tooltip: l10n.restoreOriginalDescription,
+          ),
         if (_showTranslateDescriptionButton)
           _translateAction(
             onPressed: _translateDescription,
@@ -1579,7 +1571,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
               size: 21,
               color: c,
             ),
-            onTap: () => widget.onShowInExplorer(currentModInfo.directory),
+            onTap: () => widget.onShowInExplorer(currentModInfo),
           ),
         ),
         const SizedBox(width: 8),
@@ -1603,36 +1595,24 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
 
   /// Tercer botón: endorsar el mod en Nexus Mods.
   ///  * Atenuado (pero pulsable, para explicar el motivo) si el mod no es de
-  ///    Nexus, no hay API key, o aún no pasaron 15 min desde la descarga.
+  ///    Nexus o no hay API key.
   ///  * Verde y relleno si ya está endorsado (al pulsar se ofrece quitarlo).
+  ///  * Si no, es el pulgar normal: al pulsarlo se intenta y, si Nexus lo
+  ///    rechaza (p. ej. por los 15 min tras la descarga), se avisa del motivo.
   Widget _buildEndorseTile(AppLocalizations l10n) {
-    return ValueListenableBuilder<int>(
-      valueListenable: _endorseWaitMinutes,
-      builder: (context, waitMinutes, _) {
-        final bool endorsed = _isEndorsed;
-        final bool unavailable = !_isNexusMod || !_hasApiKey;
-        final bool waiting = !unavailable && !endorsed && waitMinutes > 0;
-
-        final String label = endorsed
-            ? l10n.detailsEndorsed
-            : waiting
-                ? l10n.endorseWaitLabel(waitMinutes)
-                : l10n.detailsEndorse;
-        final IconData icon = endorsed
-            ? Icons.thumb_up_alt_rounded
-            : waiting
-                ? Icons.schedule_rounded
-                : Icons.thumb_up_alt_outlined;
-
-        return _ActionTile(
-          label: label,
-          tint: endorsed ? IosColors.green : null,
-          dimmed: unavailable || waiting,
-          busy: _endorseBusy,
-          iconBuilder: (c) => Icon(icon, size: 21, color: c),
-          onTap: _onEndorsePressed,
-        );
-      },
+    final bool endorsed = _isEndorsed;
+    final bool unavailable = !_isNexusMod || !_hasApiKey;
+    return _ActionTile(
+      label: endorsed ? l10n.detailsEndorsed : l10n.detailsEndorse,
+      tint: endorsed ? IosColors.green : null,
+      dimmed: unavailable,
+      busy: _endorseBusy,
+      iconBuilder: (c) => Icon(
+        endorsed ? Icons.thumb_up_alt_rounded : Icons.thumb_up_alt_outlined,
+        size: 21,
+        color: c,
+      ),
+      onTap: _onEndorsePressed,
     );
   }
 

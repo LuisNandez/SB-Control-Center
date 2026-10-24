@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../models/nexus_plan.dart';
 import '../utils/version_utils.dart';
 import 'endorse_info_store.dart';
 
@@ -68,6 +69,61 @@ class _CachedModData {
   final Map<String, dynamic> data;
   final DateTime time;
   _CachedModData(this.data, this.time);
+}
+
+/// Motivo por el que no se pudo resolver el enlace de descarga de un nxm://.
+enum NxmLinkFailureKind {
+  noApiKey,
+  invalidLink,
+  unauthorized, // 401: API key rechazada
+  forbidden, // 403: enlace caducado / key o expires inválidos
+  notFound, // 404
+  rateLimited, // 429
+  server, // 5xx
+  network, // sin conexión / timeout
+  noLinks, // Nexus no devolvió ningún mirror
+}
+
+class NxmLinkException implements Exception {
+  final NxmLinkFailureKind kind;
+  final int? statusCode;
+  final String detail;
+  const NxmLinkException(this.kind, {this.statusCode, this.detail = ''});
+
+  @override
+  String toString() =>
+      'NxmLinkException(${kind.name}${statusCode != null ? ' $statusCode' : ''}) $detail';
+}
+
+/// Resultado de resolver un nxm://: TODOS los mirrors del CDN (el primero es
+/// el preferido) más los datos del archivo.
+class NxmDownloadInfo {
+  final List<String> urls;
+  final String fileName;
+  final String modId;
+  final String version;
+
+  /// Tamaño exacto según la API (para el progreso y las comprobaciones).
+  final int? sizeBytes;
+
+  const NxmDownloadInfo({
+    required this.urls,
+    required this.fileName,
+    required this.modId,
+    required this.version,
+    this.sizeBytes,
+  });
+
+  String get url => urls.first;
+}
+
+class _NxmRef {
+  final String game;
+  final String modId;
+  final String fileId;
+  final String? key;
+  final String? expires;
+  const _NxmRef(this.game, this.modId, this.fileId, this.key, this.expires);
 }
 
 class NexusApiService {
@@ -724,60 +780,200 @@ class NexusApiService {
     }
   }
 
-  static Future<Map<String, String>?> getDownloadLinkFromNxm(String nxmUrl, String? apiKey) async {
-    if (apiKey == null || apiKey.isEmpty) return null;
+  static bool _hasArchiveExtension(String name) {
+    final n = name.toLowerCase();
+    return n.endsWith('.zip') || n.endsWith('.rar') || n.endsWith('.7z');
+  }
 
+  static _NxmRef? _parseNxm(String nxmUrl) {
     try {
       final uri = Uri.parse(nxmUrl);
-      final gameDomain = uri.host;
-      final modId = uri.pathSegments[1];
-      final fileId = uri.pathSegments[3];
-      
-      final key = uri.queryParameters['key'];
-      final expires = uri.queryParameters['expires'];
-
-      final apiUrl = Uri.parse(
-        'https://api.nexusmods.com/v1/games/$gameDomain/mods/$modId/files/$fileId/download_link.json?key=$key&expires=$expires'
+      final seg = uri.pathSegments;
+      final mi = seg.indexOf('mods');
+      final fi = seg.indexOf('files');
+      if (uri.host.isEmpty ||
+          mi < 0 ||
+          fi < 0 ||
+          mi + 1 >= seg.length ||
+          fi + 1 >= seg.length) {
+        return null;
+      }
+      return _NxmRef(
+        uri.host,
+        seg[mi + 1],
+        seg[fi + 1],
+        uri.queryParameters['key'],
+        uri.queryParameters['expires'],
       );
+    } catch (_) {
+      return null;
+    }
+  }
 
-      final response = await http.get(apiUrl, headers: {'apikey': apiKey, 'accept': 'application/json'});
-      _updateLimitsFromHeaders(response); // <-- Actualizamos aquí
-      
-      if (response.statusCode == 200) {
-        // ... (el resto de tu lógica de NXM sigue exactamente igual)
-        final List<dynamic> links = json.decode(response.body);
-        if (links.isNotEmpty) {
-          final bestLink = links.firstWhere((link) => link['short_name'] == 'Premium', orElse: () => links.first);
-          final cdnUrl = bestLink['URI'] as String;
-          String fileName = Uri.parse(cdnUrl).pathSegments.last;
-          String exactVersion = '1';
-          
-          if (!fileName.toLowerCase().endsWith('.zip') && !fileName.toLowerCase().endsWith('.rar') && !fileName.toLowerCase().endsWith('.7z')) {
-            try {
-              final fileDetailsUrl = Uri.parse('https://api.nexusmods.com/v1/games/$gameDomain/mods/$modId/files/$fileId.json');
-              final fileDetailsResponse = await http.get(fileDetailsUrl, headers: {'apikey': apiKey, 'accept': 'application/json'});
-              _updateLimitsFromHeaders(fileDetailsResponse); // <-- ¡También lo atrapamos aquí por si acaso!
-              
-              if (fileDetailsResponse.statusCode == 200) {
-                final fileDetails = json.decode(fileDetailsResponse.body);
-                final realFileName = fileDetails['file_name'] as String?;
-                if (realFileName != null && realFileName.isNotEmpty) fileName = realFileName;
-                if (fileDetails['version'] != null) exactVersion = fileDetails['version'].toString();
-              }
-            } catch (e) {
-              print("Error al consultar detalles: $e");
-            }
-            if (!fileName.toLowerCase().endsWith('.zip') && !fileName.toLowerCase().endsWith('.rar') && !fileName.toLowerCase().endsWith('.7z')) {
-              fileName = '$fileName.zip';
-            }
+  static NxmLinkException _linkExceptionForStatus(int status) {
+    if (status == 401) {
+      return NxmLinkException(NxmLinkFailureKind.unauthorized, statusCode: status);
+    }
+    if (status == 403) {
+      return NxmLinkException(NxmLinkFailureKind.forbidden, statusCode: status);
+    }
+    if (status == 404) {
+      return NxmLinkException(NxmLinkFailureKind.notFound, statusCode: status);
+    }
+    if (status == 429) {
+      return NxmLinkException(NxmLinkFailureKind.rateLimited, statusCode: status);
+    }
+    if (status >= 500) {
+      return NxmLinkException(NxmLinkFailureKind.server, statusCode: status);
+    }
+    return NxmLinkException(NxmLinkFailureKind.invalidLink,
+        statusCode: status, detail: 'HTTP $status');
+  }
+
+  static int? _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v?.toString() ?? '');
+  }
+
+  /// Resuelve un nxm:// a TODOS los mirrors del CDN. Reintenta ante fallos
+  /// transitorios (red, 429, 5xx) y lanza [NxmLinkException] con el motivo
+  /// real en vez de devolver un `null` mudo.
+  static Future<NxmDownloadInfo> resolveNxmDownload(
+      String nxmUrl, String? apiKey) async {
+    if (apiKey == null || apiKey.isEmpty) {
+      throw const NxmLinkException(NxmLinkFailureKind.noApiKey);
+    }
+    final ref = _parseNxm(nxmUrl);
+    if (ref == null) {
+      throw NxmLinkException(NxmLinkFailureKind.invalidLink,
+          detail: 'Unrecognized nxm link');
+    }
+
+    // Los usuarios Premium pueden no traer key/expires: no se envían como "null".
+    final query = <String, String>{
+      if (ref.key != null && ref.key!.isNotEmpty) 'key': ref.key!,
+      if (ref.expires != null && ref.expires!.isNotEmpty) 'expires': ref.expires!,
+    };
+    final apiUri = Uri.https(
+      'api.nexusmods.com',
+      '/v1/games/${ref.game}/mods/${ref.modId}/files/${ref.fileId}/download_link.json',
+      query.isEmpty ? null : query,
+    );
+    final headers = {'apikey': apiKey, 'accept': 'application/json'};
+
+    http.Response? response;
+    NxmLinkException? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final r = await http
+            .get(apiUri, headers: headers)
+            .timeout(const Duration(seconds: 20));
+        _updateLimitsFromHeaders(r);
+        if (r.statusCode == 200) {
+          response = r;
+          break;
+        }
+        lastError = _linkExceptionForStatus(r.statusCode);
+        final retryable = r.statusCode == 429 || r.statusCode >= 500;
+        if (!retryable) throw lastError;
+      } on NxmLinkException {
+        rethrow;
+      } catch (e) {
+        lastError = NxmLinkException(NxmLinkFailureKind.network, detail: e.toString());
+      }
+      await Future.delayed(Duration(seconds: 1 + attempt * 2));
+    }
+    if (response == null) {
+      throw lastError ?? const NxmLinkException(NxmLinkFailureKind.network);
+    }
+
+    dynamic decoded;
+    try {
+      decoded = json.decode(response.body);
+    } catch (e) {
+      throw NxmLinkException(NxmLinkFailureKind.invalidLink,
+          detail: 'Unexpected API response: $e');
+    }
+    final links = decoded is List ? decoded.whereType<Map>().toList() : <Map>[];
+
+    // Premium primero; después el resto de mirrors en el orden de Nexus.
+    final urls = <String>[];
+    void addUrl(Map link) {
+      final u = link['URI']?.toString();
+      if (u != null && u.isNotEmpty && !urls.contains(u)) urls.add(u);
+    }
+
+    for (final l in links) {
+      if (l['short_name'] == 'Premium') addUrl(l);
+    }
+    for (final l in links) {
+      addUrl(l);
+    }
+    if (urls.isEmpty) {
+      throw const NxmLinkException(NxmLinkFailureKind.noLinks);
+    }
+
+    final firstSegments = Uri.tryParse(urls.first)?.pathSegments ?? const <String>[];
+    var fileName = firstSegments.isNotEmpty ? firstSegments.last : '';
+    var exactVersion = '1';
+    int? sizeBytes;
+
+    // Detalles del archivo (mejor esfuerzo): nombre real, versión y tamaño.
+    try {
+      final detailsUri = Uri.parse(
+          'https://api.nexusmods.com/v1/games/${ref.game}/mods/${ref.modId}/files/${ref.fileId}.json');
+      final dr = await http
+          .get(detailsUri, headers: headers)
+          .timeout(const Duration(seconds: 15));
+      _updateLimitsFromHeaders(dr);
+      if (dr.statusCode == 200) {
+        final details = json.decode(dr.body);
+        if (details is Map) {
+          sizeBytes = _asInt(details['size_in_bytes']);
+          if (sizeBytes == null) {
+            final kb = _asInt(details['size_kb']);
+            if (kb != null) sizeBytes = kb * 1024;
           }
-          return {'url': cdnUrl, 'fileName': fileName, 'modId': modId, 'version': exactVersion};
+          if (!_hasArchiveExtension(fileName)) {
+            final realFileName = details['file_name'] as String?;
+            if (realFileName != null && realFileName.isNotEmpty) fileName = realFileName;
+            if (details['version'] != null) exactVersion = details['version'].toString();
+          }
         }
       }
     } catch (e) {
-      print("Error nxm:// : $e");
+      print('Error al consultar detalles: $e');
     }
-    return null;
+
+    if (fileName.isEmpty) fileName = 'mod-${ref.modId}-${ref.fileId}';
+    if (!_hasArchiveExtension(fileName)) fileName = '$fileName.zip';
+
+    return NxmDownloadInfo(
+      urls: urls,
+      fileName: fileName,
+      modId: ref.modId,
+      version: exactVersion,
+      sizeBytes: sizeBytes,
+    );
+  }
+
+  /// Compatibilidad con el código antiguo: devuelve solo el primer mirror o
+  /// null si falla. Para descargas nuevas usar [resolveNxmDownload].
+  static Future<Map<String, String>?> getDownloadLinkFromNxm(
+      String nxmUrl, String? apiKey) async {
+    try {
+      final info = await resolveNxmDownload(nxmUrl, apiKey);
+      return {
+        'url': info.url,
+        'fileName': info.fileName,
+        'modId': info.modId,
+        'version': info.version,
+      };
+    } catch (e) {
+      print('Error nxm:// : $e');
+      return null;
+    }
   }
 
   static Future<Map<String, dynamic>?> validateAndGetProfile(String apiKey) async {
@@ -791,9 +987,14 @@ class NexusApiService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        // Nexus manda las banderas como "is_premium" o "is_premium?" según el caso.
+        final isPremium = (data['is_premium'] ?? data['is_premium?']) == true;
+        final isSupporter = (data['is_supporter'] ?? data['is_supporter?']) == true;
         return {
           'isValid': true,
-          'isPremium': data['is_premium'] ?? false,
+          'isPremium': isPremium,
+          'isSupporter': isSupporter,
+          'plan': NexusPlan.fromFlags(isPremium: isPremium, isSupporter: isSupporter),
           'name': data['name'], // el texto de respaldo se resuelve en la UI (l10n.nexusUserFallback)
           'profileUrl': data['profile_url'],
         };
@@ -884,6 +1085,116 @@ class NexusApiService {
     return status;
   }
 
+  /// Igual que [fetchEndorseStatus], pero una cuenta que nunca ha endorsado
+  /// nada devuelve 'Undecided' (Nexus a veces no manda el campo `endorsement`
+  /// ni la lista de endorsements lo incluye). null solo si NO se pudo consultar.
+  static Future<String?> fetchEndorseStatusOrUndecided(
+    String nexusId,
+    String? apiKey,
+  ) async {
+    if (apiKey == null || apiKey.isEmpty) return null;
+
+    String? status;
+    bool modOk = false;
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+              'https://api.nexusmods.com/v1/games/stellarblade/mods/$nexusId.json',
+            ),
+            headers: {'apikey': apiKey, 'accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 20));
+      _updateLimitsFromHeaders(response);
+      if (response.statusCode == 200) {
+        modOk = true;
+        final data = json.decode(response.body);
+        final endorsement = data is Map ? data['endorsement'] : null;
+        if (endorsement is Map) {
+          status = EndorseRecord.normalize(endorsement['endorse_status']);
+        }
+      } else {
+        print('[Endorse] ficha del mod $nexusId: HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetchEndorseStatusOrUndecided($nexusId): $e');
+    }
+
+    if (status == null || status == 'Undecided') {
+      final all = await _fetchUserEndorsements(apiKey);
+      if (all != null) {
+        status = all[nexusId] ?? status ?? 'Undecided';
+      } else if (status == null && modOk) {
+        status = 'Undecided';
+      }
+    }
+    return status;
+  }
+
+  // ---- Última descarga de este mod por la cuenta ------------------------------
+  // Nexus no expone "el botón endorse está habilitado", pero sí `viewerDownloaded`
+  // (GraphQL v2): la FECHA de la última vez que la cuenta descargó el mod. Los
+  // 15 min de espera se cuentan desde esa fecha.
+  static int? _gameIdCache;
+
+  static Future<int?> _stellarBladeGameId(String apiKey) async {
+    if (_gameIdCache != null) return _gameIdCache;
+    try {
+      final response = await http
+          .get(
+            Uri.parse('https://api.nexusmods.com/v1/games/stellarblade.json'),
+            headers: {'apikey': apiKey, 'accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 20));
+      _updateLimitsFromHeaders(response);
+      if (response.statusCode != 200) return null;
+      final data = json.decode(response.body);
+      return _gameIdCache = int.tryParse('${data is Map ? data['id'] : ''}');
+    } catch (e) {
+      print('Error _stellarBladeGameId: $e');
+      return null;
+    }
+  }
+
+  /// Fecha en que la cuenta descargó este mod por última vez. null = no se sabe
+  /// (sin API key, sin red, nunca descargado, campo no disponible...).
+  static Future<DateTime?> fetchViewerDownloadedAt(
+    String nexusId,
+    String? apiKey,
+  ) async {
+    if (apiKey == null || apiKey.isEmpty) return null;
+    final modId = int.tryParse(nexusId);
+    final gameId = await _stellarBladeGameId(apiKey);
+    if (modId == null || gameId == null) return null;
+
+    // Ids como literales: valen tanto si el esquema los declara Int como ID.
+    final queries = <String, Object? Function(Map)>{
+      'query { mod(modId: $modId, gameId: $gameId) { viewerDownloaded } }':
+          (data) => data['mod'],
+      'query { legacyMods(ids: [{gameId: $gameId, modId: $modId}]) '
+          '{ nodes { viewerDownloaded } } }': (data) {
+        final nodes = data['legacyMods'] is Map ? data['legacyMods']['nodes'] : null;
+        return nodes is List && nodes.isNotEmpty ? nodes.first : null;
+      },
+    };
+
+    for (final entry in queries.entries) {
+      final body = await _graphql(entry.key, const {}, apiKey);
+      final data = body?['data'];
+      if (body == null || body['errors'] != null || data is! Map) {
+        print('[Endorse] consulta viewerDownloaded falló: ${body?['errors']}');
+        continue;
+      }
+      final node = entry.value(data);
+      final raw = node is Map ? node['viewerDownloaded'] : null;
+      print('[Endorse] viewerDownloaded($nexusId) = $raw');
+      final at = raw == null ? null : DateTime.tryParse(raw.toString());
+      if (at != null) return at.toLocal();
+      return null; // consulta válida pero sin fecha (nunca descargado)
+    }
+    return null;
+  }
+
   static EndorseFailure? _endorseFailureFromMessage(String upperMessage) {
     if (upperMessage.contains('TOO_SOON')) return EndorseFailure.tooSoon;
     if (upperMessage.contains('NOT_DOWNLOADED')) {
@@ -947,7 +1258,10 @@ class NexusApiService {
       }
 
       final byMessage = _endorseFailureFromMessage(upper);
-      if (byMessage != null) return EndorseResult.failure(byMessage);
+      if (byMessage != null) {
+        print('[Endorse] Nexus rechazó el endorse: "$message"');
+        return EndorseResult.failure(byMessage);
+      }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final status = endorse ? 'Endorsed' : 'Abstained';

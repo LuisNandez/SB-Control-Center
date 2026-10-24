@@ -7,6 +7,7 @@ import 'dart:ui' show ImageFilter, FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:desktop_drop/desktop_drop.dart';
@@ -25,6 +26,8 @@ import 'package:hugeicons/hugeicons.dart';
 import 'models/mod_info.dart';
 import 'config/app_prefs.dart';
 import 'models/app_enums.dart';
+import 'models/nexus_plan.dart';
+import 'services/self_endorse_service.dart';
 import 'utils/version_utils.dart';
 import 'services/nexus_api_service.dart';
 import 'services/endorse_info_store.dart';
@@ -41,8 +44,12 @@ import 'services/core_installer_service.dart';
 import 'models/installation_models.dart';
 import 'services/archive_service.dart';
 import 'services/mod_manager_service.dart';
+import 'services/mod_locations_service.dart';
+import 'ui/dialogs/mod_location_picker.dart';
 import 'services/mod_metadata_migrator.dart';
 import 'services/update_service.dart';
+import 'services/self_update_service.dart';
+import 'ui/dialogs/self_update_dialog.dart';
 import 'services/special_mods_handler.dart';
 import 'ui/dialogs/special_mod_dialog.dart';
 import 'ui/dialogs/variant_choice_dialog.dart';
@@ -74,6 +81,9 @@ final StreamController<String> multiInstanceLinkStream = StreamController<String
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Si la app fue reabierta por una auto-actualización, espera a que la
+  // instancia anterior termine (control de instancia única).
+  await SelfUpdateService.waitForPreviousInstance(args);
   HttpOverrides.global = NexusHttpOverrides();
 
   await windowManager.ensureInitialized();
@@ -181,6 +191,15 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   final List<File> _installQueue = [];
   bool _isProcessingQueue = false;
 
+  // --- Panel único de instalación (las descargas se apilan dentro) ---------
+  bool _installPanelOpen = false;
+  bool _panelFromDownloads = false;
+  bool _isDrainingQueue = false;
+  int _extractionBatch = 0;
+  VoidCallback? _drainPanelQueue;
+  final Set<String> _enqueuedDownloadPaths = {};
+  final List<File> _consumedDownloads = [];
+
   String _statusMessage = '';
   Color _statusColor = Colors.white;
   bool _isLoading = true;
@@ -268,7 +287,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   StreamSubscription<String>? _multiInstanceSubscription;
 
   String? _nexusUserName;
-  bool _isNexusPremium = false;
+  NexusPlan _nexusPlan = NexusPlan.member;
   String? _nexusAvatarUrl;
 
   @override
@@ -286,6 +305,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     
     // Esperamos a que todo se inicialice (incluyendo la carga de la API Key)
     _initialize().then((_) {
+      // Invita a configurar la API key de Nexus si no hay ninguna (opcional).
+      _maybeShowApiKeyPrompt();
       // Solo registramos el listener y revisamos el link cuando todo está listo
       protocolHandler.addListener(this);
       _checkInitialProtocolUrl();
@@ -364,11 +385,11 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       linkErrorText: l10n.downloadErrorLink,
       downloadErrorText: l10n.downloadErrorGeneral,
       l10n: l10n,
-      onComplete: (File readyFile, String modId, String version) { 
+      onComplete: (File readyFile, String modId, String version) {
+        // Se apila: si el panel ya está abierto lo absorbe; si no, se abre uno.
+        _enqueuedDownloadPaths.add(readyFile.path);
         _installQueue.add(readyFile);
-        if (!_isProcessingQueue) {
-          _processInstallQueue();
-        }
+        _processInstallQueue();
       },
     );
   }
@@ -381,10 +402,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     await _getAppVersion();
     await _thumbnailService.initialize();
     await _cleanUpOrphanedTempDirs();
+    await SelfUpdateService.cleanupLeftovers();
     await _loadModDatabase();
     await _loadLogicModIds();
     await _find7zipPath();
     await _loadApiKey();
+    SelfEndorseService.instance.configure(apiKey: _apiKey, version: _appVersion);
     await _loadSkippedVersions();
     await _loadPrefs();
     await _findGamePath();
@@ -490,102 +513,163 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     });
   }
 
-  Future<void> _showInstallationPanel({List<File>? initialFiles}) async {
+  Future<void> _showInstallationPanel({
+    List<File>? initialFiles,
+    bool fromDownloads = false,
+  }) async {
+    // UN solo panel: si ya está abierto, lo que llegue se apila dentro.
+    if (_installPanelOpen) return;
     if (_preparedMods.isNotEmpty) {
       _clearSelection();
     }
 
     final l10n = AppLocalizations.of(context)!;
+    _installPanelOpen = true;
+    _panelFromDownloads = fromDownloads;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: IosColors.background,
-      barrierColor: const Color(0x66000000),
-      constraints: const BoxConstraints(maxWidth: 640),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        side: BorderSide(color: Color(0x1FFFFFFF), width: 0.5),
-      ),
-      enableDrag: false,
-      builder: (context) {
-        var hasProcessedInitialFiles = false;
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setPanelState) {
-            if (initialFiles != null && !hasProcessedInitialFiles) {
-              WidgetsBinding.instance.addPostFrameCallback((_) async {
-                final bool didInstall = await _processArchives(
-                  initialFiles,
-                  panelStateSetter: setPanelState,
-                );
-                if (didInstall && mounted) {
-                  Navigator.pop(context);
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: IosColors.background,
+        barrierColor: const Color(0x66000000),
+        constraints: const BoxConstraints(maxWidth: 640),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+          side: BorderSide(color: Color(0x1FFFFFFF), width: 0.5),
+        ),
+        enableDrag: false,
+        builder: (context) {
+          var hasStarted = false;
+          return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setPanelState) {
+              // Cierra SOLO este panel (y solo si sigue abierto).
+              void closePanel() {
+                final route = ModalRoute.of(context);
+                if (route != null && route.isActive) {
+                  Navigator.of(context).pop();
                 }
-              });
-              hasProcessedInitialFiles = true;
-            }
-            return WillPopScope(
-              onWillPop: () async {
-                if (_isExtracting || _isLoading || _isInstalling) {
-                  return false;
-                }
+              }
 
-                if (_preparedMods.isNotEmpty) {
-                  await _cancelAndCleanInstallation();
-                  setState(() {
-                    _statusMessage = AppLocalizations.of(context)!.statusSelectionCancelled;
-                    _statusColor = Colors.white;
-                  });
-                }
-                return true;
-              },
-              child: InstallationPanelContent(
-                l10n: l10n,
-                isDragging: _isDragging,
-                isExtracting: _isExtracting,
-                isInstalling: _isInstalling,
-                isLoading: _isLoading,
-                extractionProgress: _extractionProgress,
-                extractionStatus: _extractionStatus,
-                installationProgress: _installationProgress,
-                installationStatus: _installationStatus,
-                statusMessage: _statusMessage,
-                statusColor: _statusColor,
-                hasPreparedMods: _preparedMods.isNotEmpty,
-                modsToInstallPreviewMap: _modsToInstallPreviewMap,
-                onFilesDropped: (files) async {
-                  final bool didInstall = await _processArchives(
-                    files,
-                    panelStateSetter: setPanelState,
-                  );
-                  if (didInstall && mounted) {
-                    Navigator.pop(context);
-                  } else {
-                    setPanelState(() {});
+              // Lo usa _processInstallQueue cuando llega una descarga nueva.
+              _drainPanelQueue =
+                  () => _drainInstallQueue(setPanelState, closePanel);
+
+              if (!hasStarted) {
+                hasStarted = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  if (initialFiles != null && initialFiles.isNotEmpty) {
+                    final bool didInstall = await _processArchives(
+                      initialFiles,
+                      panelStateSetter: setPanelState,
+                    );
+                    if (didInstall &&
+                        mounted &&
+                        _preparedMods.isEmpty &&
+                        !_hasPendingDownloads()) {
+                      closePanel();
+                      return;
+                    }
                   }
-                },
-                onDragUpdate: (isDragging) => setPanelState(() => _isDragging = isDragging),
-                onPickArchive: () async {
-                  final bool didInstall = await _pickArchive(
-                    panelStateSetter: setPanelState,
-                  );
-                  if (didInstall && mounted) {
-                    Navigator.pop(context);
-                  } else {
-                    setPanelState(() {});
+                  // Descargas que ya estaban esperando en la cola.
+                  await _drainInstallQueue(setPanelState, closePanel);
+                });
+              }
+              return WillPopScope(
+                onWillPop: () async {
+                  if (_isExtracting || _isLoading || _isInstalling) {
+                    return false;
                   }
+
+                  if (_preparedMods.isNotEmpty) {
+                    // Cerrar sin querer (clic fuera / X) perdería lo apilado.
+                    final bool discard = await confirmDiscardInstallation(
+                      context,
+                      modCount: _modsToInstallPreviewMap.isNotEmpty
+                          ? _modsToInstallPreviewMap.length
+                          : _preparedMods.length,
+                    );
+                    if (!discard) return false;
+                    await _cancelAndCleanInstallation();
+                    setState(() {
+                      _statusMessage =
+                          AppLocalizations.of(context)!.statusSelectionCancelled;
+                      _statusColor = Colors.white;
+                    });
+                  }
+                  return true;
                 },
-                onInstallMod: () async {
-                  await _installMod(panelStateSetter: setPanelState);
-                  if (mounted) Navigator.pop(context);
-                },
-                onCancelSelection: () => _clearSelection(panelStateSetter: setPanelState),
-              ),
-            );
-          },
-        );
-      },
-    );
+                child: InstallationPanelContent(
+                  l10n: l10n,
+                  isDragging: _isDragging,
+                  isExtracting: _isExtracting,
+                  isInstalling: _isInstalling,
+                  isLoading: _isLoading,
+                  extractionProgress: _extractionProgress,
+                  extractionStatus: _extractionStatus,
+                  installationProgress: _installationProgress,
+                  installationStatus: _installationStatus,
+                  statusMessage: _statusMessage,
+                  statusColor: _statusColor,
+                  hasPreparedMods: _preparedMods.isNotEmpty,
+                  modsToInstallPreviewMap: _modsToInstallPreviewMap,
+                  downloadMode: _panelFromDownloads,
+                  onFilesDropped: (files) async {
+                    final bool didInstall = await _processArchives(
+                      files,
+                      panelStateSetter: setPanelState,
+                    );
+                    if (didInstall &&
+                        mounted &&
+                        _preparedMods.isEmpty &&
+                        !_hasPendingDownloads()) {
+                      closePanel();
+                    } else {
+                      setPanelState(() {});
+                    }
+                  },
+                  onDragUpdate: (isDragging) =>
+                      setPanelState(() => _isDragging = isDragging),
+                  onPickArchive: () async {
+                    final bool didInstall = await _pickArchive(
+                      panelStateSetter: setPanelState,
+                    );
+                    if (didInstall &&
+                        mounted &&
+                        _preparedMods.isEmpty &&
+                        !_hasPendingDownloads()) {
+                      closePanel();
+                    } else {
+                      setPanelState(() {});
+                    }
+                  },
+                  onInstallMod: () async {
+                    await _installMod(panelStateSetter: setPanelState);
+                    if (!mounted) return;
+                    if (_hasPendingDownloads()) {
+                      // Vienen más descargas: el panel sigue abierto y las
+                      // irá apilando (en vez de cerrar y abrir otro).
+                      await Future.delayed(const Duration(milliseconds: 400));
+                      if (!mounted || !_installPanelOpen) return;
+                      setPanelState(() {});
+                      _drainInstallQueue(setPanelState, closePanel);
+                    } else {
+                      closePanel();
+                    }
+                  },
+                  onCancelSelection: () =>
+                      _clearSelection(panelStateSetter: setPanelState),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      _installPanelOpen = false;
+      _panelFromDownloads = false;
+      _drainPanelQueue = null;
+    }
     await _loadAllMods();
   }
 
@@ -669,24 +753,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     }
   }
 
-  Future<void> _cleanUpOrphanedTempDirs() async {
-    try {
-      final tempDir = Directory.systemTemp;
-      await for (final entity in tempDir.list()) {
-        if (entity is Directory && p.basename(entity.path).startsWith('mod_manager_')) {
-          try {
-            await FileManagerService.deleteDirectoryWithRetry(entity);
-          } catch (e) {
-            print('Could not delete orphan directory ${entity.path}: $e');
-          }
-        }
-      }
-    } catch (e) {
-      print(
-        'An error occurred during general cleanup of temporary folders: $e',
-      );
-    }
-  }
+  Future<void> _cleanUpOrphanedTempDirs() =>
+      FileManagerService.cleanOrphanedTempDirs();
 
   Future<void> _showRepairedModInfoDialog() async {
     final l10n = AppLocalizations.of(context)!;
@@ -720,6 +788,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       for (var entity in entities) {
         if (entity is Directory) {
           if (p.basename(entity.path) == '__MOD_BACKUPS__') continue;
+          // Animations / Cosmetics del CNS principal: la app no las toca.
+          if (await ModManagerService.isCoreCnsAddon(entity,
+              inCnsFolder: _finalModsPath != null &&
+                  p.equals(path, _finalModsPath!))) {
+            continue;
+          }
 
           final infoFile = File(p.join(entity.path, 'nexus_info.json'));
           if (await infoFile.exists()) {
@@ -832,7 +906,15 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       _apiKey = prefs.getString(AppPrefs.nexusApiKey);
     });
     // 1. Cargamos el último estado conocido rápido para que la UI no espere
-    DownloadManager.instance.isUserPremium = prefs.getBool('is_premium') ?? false;
+    // (antes solo se guardaba 'is_premium'; se migra si aún no hay 'nexus_plan')
+    final savedPlan = prefs.getString('nexus_plan');
+    final NexusPlan lastPlan = savedPlan != null
+        ? NexusPlan.fromName(savedPlan)
+        : ((prefs.getBool('is_premium') ?? false)
+            ? NexusPlan.premium
+            : NexusPlan.member);
+    DownloadManager.instance.userPlan = lastPlan;
+    if (mounted) setState(() => _nexusPlan = lastPlan);
 
     // 2. Verificación silenciosa en segundo plano para actualizar el estado
     if (_apiKey != null && _apiKey!.isNotEmpty) {
@@ -844,19 +926,19 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     final profileData = await NexusApiService.validateAndGetProfile(key);
     
     if (profileData != null && profileData['isValid'] == true) {
-      final isPremium = profileData['isPremium'] as bool;
+      final plan = profileData['plan'] as NexusPlan;
       
       // Actualizamos las preferencias locales
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_premium', isPremium);
+      await prefs.setString('nexus_plan', plan.name);
       
       // Inyectamos el nuevo estado (si cambió, notifyListeners actualizará la píldora)
-      DownloadManager.instance.isUserPremium = isPremium;
+      DownloadManager.instance.userPlan = plan;
 
       if (mounted) {
         setState(() {
           _nexusUserName = profileData['name'];
-          _isNexusPremium = isPremium;
+          _nexusPlan = plan;
           _nexusAvatarUrl = profileData['profileUrl'];
         });
       }
@@ -869,6 +951,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     setState(() {
       _apiKey = apiKey;
     });
+    SelfEndorseService.instance.configure(apiKey: apiKey, version: _appVersion);
   }
 
   Future<void> _loadSkippedVersions() async {
@@ -1284,7 +1367,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       final dir = Directory(root);
       if (!await dir.exists()) continue;
       await for (var entity in dir.list()) {
-        if (entity is Directory) modPaths.add(entity.path);
+        if (entity is! Directory) continue;
+        // Animations / Cosmetics del CNS principal: se ignoran.
+        if (await ModManagerService.isCoreCnsAddon(entity,
+            inCnsFolder: p.equals(root, _finalModsPath ?? ''))) {
+          continue;
+        }
+        modPaths.add(entity.path);
       }
     }
 
@@ -1443,6 +1532,75 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     }
   }
 
+  bool _refreshingMetadata = false;
+
+  /// Botón "Actualizar metadatos" de Ajustes: quita las marcas de "no
+  /// reintentar" / "ya analizado" de todos los mods y repite la actualización
+  /// (datos de Nexus, galería y trajes asignados automáticamente).
+  Future<void> _refreshAllMetadata() async {
+    if (_refreshingMetadata || _finalModsPath == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    if (_apiKey == null || _apiKey!.isEmpty) {
+      NotificationService.instance.show(
+        context: context,
+        type: NotificationType.info,
+        title: l10n.metadataRefreshNoApiKey,
+      );
+      return;
+    }
+
+    _refreshingMetadata = true;
+    try {
+      final List<String?> roots = [
+        _finalModsPath,
+        _genericModsPath,
+        _logicModsPath,
+        if (_gameRootPath != null)
+          p.join(_gameRootPath!, 'SB', 'Content', '__MOD_BACKUPS__'),
+      ];
+      for (final root in roots) {
+        if (root == null) continue;
+        final dir = Directory(root);
+        if (!await dir.exists()) continue;
+        await for (final entity in dir.list()) {
+          if (entity is! Directory) continue;
+          if (p.basename(entity.path) == '__MOD_BACKUPS__') continue;
+          final infoFile = File(p.join(entity.path, 'nexus_info.json'));
+          if (!await infoFile.exists()) continue;
+          try {
+            final data =
+                Map<String, dynamic>.from(json.decode(await infoFile.readAsString()));
+            if (ModMetadataMigrator.resetForRefresh(data)) {
+              await infoFile
+                  .writeAsString(JsonEncoder.withIndent('  ').convert(data));
+            }
+          } catch (e) {
+            print('No se pudo preparar ${entity.path} para actualizar metadatos: $e');
+          }
+        }
+      }
+
+      ModMetadataMigrator.clearSessionFailures();
+      ModManagerService.clearGalleryFailuresThisSession();
+      ModMetadataMigrator.forceRefresh = true;
+      await _runMetadataUpdateIfNeeded();
+      await _loadAllMods(clearHighlight: false);
+
+      if (mounted) {
+        NotificationService.instance.show(
+          context: context,
+          type: NotificationType.success,
+          title: AppLocalizations.of(context)!.metadataRefreshDone,
+        );
+      }
+    } catch (e) {
+      print('Error al actualizar metadatos: $e');
+    } finally {
+      ModMetadataMigrator.forceRefresh = false;
+      _refreshingMetadata = false;
+    }
+  }
+
   Future<void> _loadAllMods({bool clearHighlight = true}) async {
     if (_finalModsPath == null) return;
     setState(() {
@@ -1472,6 +1630,9 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           _statusColor = Colors.white;
         }
       });
+
+      // Mods de películas marcados como activos que ya no están aplicados en el juego.
+      await _reconcileMovieMods();
 
       // Si la migración acaba de asignar trajes, desactiva los mods que
       // quedaron compartiendo traje con otro mod activo.
@@ -1959,82 +2120,136 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   }
 
   Future<bool> _processArchives(
-  List<File> archives, {
-  StateSetter? panelStateSetter,
-}) async {
-  final l10n = AppLocalizations.of(context)!;
-  final updateState = panelStateSetter ?? setState;
-  updateState(() {
-    _isExtracting = true;
-    _extractionProgress = 0.0;
-    _extractionStatus = '';
-  });
+    List<File> archives, {
+    StateSetter? panelStateSetter,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final updateState = panelStateSetter ?? setState;
+    updateState(() {
+      _isExtracting = true;
+      _extractionProgress = 0.0;
+      _extractionStatus = '';
+    });
 
-  try {
-  if (_tempExtractionDir != null && await _tempExtractionDir!.exists()) {
-    // Usar el FileManagerService
-    await FileManagerService.deleteDirectoryWithRetry(_tempExtractionDir!);
-  }
-  _tempExtractionDir = Directory.systemTemp.createTempSync('mod_manager_');
-
-    final result = await ArchiveService.processArchives(
-      archives: archives,
-      tempExtractionDir: _tempExtractionDir!,
-      sevenZipPath: _7zipPath,
-      apiKey: _apiKey,
-      logicModIds: _logicModIds,
-      l10n: l10n,
-      onProgress: (progress, status) {
-        updateState(() {
-          _extractionProgress = progress;
-          _extractionStatus = status;
-        });
+    try {
+      // APILAR: ya no se borra lo extraído antes. Cada tanda va a su propia
+      // subcarpeta del directorio temporal y sus mods se SUMAN a la lista.
+      if (_tempExtractionDir == null || !await _tempExtractionDir!.exists()) {
+        _tempExtractionDir =
+            Directory.systemTemp.createTempSync('mod_manager_');
       }
-    );
+      final Directory stackRoot = _tempExtractionDir!;
+      final Directory batchDir = Directory(
+        p.join(stackRoot.path, 'batch_${_extractionBatch++}'),
+      );
+      await batchDir.create(recursive: true);
 
-    _preparedMods.clear();
-    _preparedMods.addAll(result.preparedMods);
-    _preparedUE4SS = result.preparedUE4SS;
+      final result = await ArchiveService.processArchives(
+        archives: archives,
+        tempExtractionDir: batchDir,
+        sevenZipPath: _7zipPath,
+        apiKey: _apiKey,
+        logicModIds: _logicModIds,
+        l10n: l10n,
+        onProgress: (progress, status) {
+          updateState(() {
+            _extractionProgress = progress;
+            _extractionStatus = status;
+          });
+        },
+      );
 
-    if (result.cnsUpdateDir != null) {
-      return await _promptAndUpdateCNS(result.cnsUpdateDir!);
-    } else if (_preparedUE4SS != null) {
-      _preparedMods.clear();
-      return await _promptAndInstallUE4SS(_preparedUE4SS!.sourceDir);
-    } else {
-      // Si el archivo trae varias variantes que reemplazan lo mismo, deja que
-      // el usuario elija cuál instalar (si cancela, se aborta la instalación).
-      final bool proceed = await _resolveVariantConflicts();
-      if (!proceed) {
-        await _clearSelection(panelStateSetter: panelStateSetter);
+      _preparedUE4SS = result.preparedUE4SS;
+
+      // Paquetes del núcleo (UE4SS / actualización de CNS): se instalan solos.
+      if (result.cnsUpdateDir != null || _preparedUE4SS != null) {
+        Future<bool> runCore() => result.cnsUpdateDir != null
+            ? _promptAndUpdateCNS(result.cnsUpdateDir!)
+            : _promptAndInstallUE4SS(_preparedUE4SS!.sourceDir);
+
+        if (_preparedMods.isEmpty) {
+          return await runCore();
+        }
+
+        // Hay mods apilados: se protegen, porque instalar el núcleo limpia
+        // la selección y el directorio temporal.
+        final stashedMods = List<PreparedMod>.of(_preparedMods);
+        final stashedPreview =
+            Map<String, List<String>>.of(_modsToInstallPreviewMap);
+        _preparedMods.clear();
+        _tempExtractionDir = batchDir; // la limpieza solo borra esta tanda
+        bool ok = false;
+        try {
+          ok = await runCore();
+          if (ok) {
+            // La limpieza del núcleo no se espera dentro de _promptAnd...:
+            // aguardamos a que termine antes de restaurar lo apilado.
+            for (int i = 0;
+                i < 250 && _tempExtractionDir != null && batchDir.existsSync();
+                i++) {
+              await Future.delayed(const Duration(milliseconds: 40));
+            }
+          }
+        } finally {
+          _tempExtractionDir = stackRoot;
+          _preparedMods
+            ..clear()
+            ..addAll(stashedMods);
+          _modsToInstallPreviewMap = stashedPreview;
+        }
+        return ok;
+      }
+
+      final List<PreparedMod> newMods =
+          List<PreparedMod>.of(result.preparedMods);
+      final int previousCount = _preparedMods.length;
+      _preparedMods.addAll(newMods);
+
+      if (newMods.isEmpty && previousCount > 0) {
+        // El archivo nuevo no trae nada compatible: se avisa y se conserva
+        // lo que ya estaba apilado.
+        updateState(() {
+          _statusMessage = l10n.errorNoCompatibleFilesInArchive;
+          _statusColor = Colors.orangeAccent;
+        });
         return false;
       }
-      await _prepareInstallationPreview(panelStateSetter: panelStateSetter);
-    }
-    return false;
-  } catch (e) {
-    if (e.toString().contains('7ZIP_MISSING')) {
-      final installed = await _show7zipRequiredDialog();
-      if (!installed) {
-        updateState(() {
-          _statusMessage = l10n.statusError(l10n.error7zipRequired);
-          _statusColor = Colors.redAccent;
-        });
-      }
-      return false;
-    }
 
-    updateState(() {
-      _statusMessage = l10n.statusError(e.toString());
-      _statusColor = Colors.redAccent;
-    });
-    return false;
-  } finally {
-    updateState(() {
-      _isExtracting = false;
-    });
+      // Si el archivo trae varias variantes que reemplazan lo mismo, deja que
+      // el usuario elija cuál instalar (si cancela, se descarta lo NUEVO).
+      final bool proceed = await _resolveVariantConflicts();
+      if (!proceed) {
+        if (previousCount == 0) {
+          await _clearSelection(panelStateSetter: panelStateSetter);
+          return false;
+        }
+        _preparedMods.removeWhere(newMods.contains);
+      }
+      await _prepareInstallationPreview(panelStateSetter: panelStateSetter);
+      return false;
+    } catch (e) {
+      if (e.toString().contains('7ZIP_MISSING')) {
+        final installed = await _show7zipRequiredDialog();
+        if (!installed) {
+          updateState(() {
+            _statusMessage = l10n.statusError(l10n.error7zipRequired);
+            _statusColor = Colors.redAccent;
+          });
+        }
+        return false;
+      }
+
+      updateState(() {
+        _statusMessage = l10n.statusError(e.toString());
+        _statusColor = Colors.redAccent;
+      });
+      return false;
+    } finally {
+      updateState(() {
+        _isExtracting = false;
+      });
+    }
   }
-}
 
   /// Detecta variantes del mismo archivo que reemplazan lo mismo y pregunta cuál
   /// instalar. Devuelve false si el usuario cancela.
@@ -2483,6 +2698,46 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
 
   /// Busca entre [candidates] el mod instalado que corresponde al mismo archivo
   /// de Nexus que [preparedMod] (mismo file_id) o a una versión anterior suya.
+  /// Tipos de mod que pueden llevar partes fuera de su carpeta (scripts UE4SS,
+  /// archivos sueltos de UE4SS y, en los logic antiguos, paks en ~mods). Para
+  /// el resto, los bloques de componentes simplemente no encuentran nada.
+  bool _canHaveExtraParts(ModInfo mod) =>
+      mod.modType == 'logicMod' ||
+      mod.modType == 'genericPak' ||
+      mod.modType == 'replacement';
+
+  /// Un logic antiguo con paks en ~mods/<nombre> (componente aparte): al
+  /// reemplazarlo hay que borrar también esa carpeta. Con el mod desactivado
+  /// vive dentro de su respaldo y se borra con él.
+  Future<void> _removeOldTildeComponent(ModInfo old) async {
+    if (!old.isEnabled || _genericModsPath == null) return;
+    try {
+      final info = File(p.join(old.directory.path, 'nexus_info.json'));
+      if (!await info.exists()) return;
+      final data = json.decode(await info.readAsString());
+      final folder = data is Map ? data['tildeModsComponentFolder'] : null;
+      if (folder is! String || folder.isEmpty) return;
+      final dir = Directory(p.join(_genericModsPath!, folder));
+      if (p.equals(dir.path, old.directory.path)) return;
+      if (await dir.exists()) {
+        await FileManagerService.deleteDirectoryWithRetry(dir);
+      }
+    } catch (_) {}
+  }
+
+  /// ¿[dir] contiene algún .pak/.utoc/.ucas (en cualquier subcarpeta)?
+  Future<bool> _dirHasPackageFiles(Directory dir) async {
+    const exts = {'.pak', '.utoc', '.ucas'};
+    try {
+      await for (final e in dir.list(recursive: true, followLinks: false)) {
+        if (e is File && exts.contains(p.extension(e.path).toLowerCase())) {
+          return true;
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
   Future<ModInfo?> _findInstalledByFileLineage(
     PreparedMod preparedMod,
     Iterable<ModInfo> candidates,
@@ -2826,6 +3081,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     String? fitMeshType;
     String? installPath;
     List<String> replacedFiles = [];
+    // Mods de películas: vídeos elegidos (conservan su ruta relativa a Movies)
+    List<MovieSourceFile> selectedMovieFiles = [];
 
     // Definir la ruta de backup general (para mods deshabilitados y movies)
     if (_gameRootPath == null) throw Exception(l10n.errorGamePathNotDefined);
@@ -2883,8 +3140,24 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         finalFolderName = '$finalFolderName v$nexusVersion';
       }
 
-      // Ruta final para la parte Lógica: .../Paks/LogicMods/<mod_name>
-      final logicModDestPath = p.join(installPath, finalFolderName);
+      // ¿Es en realidad un mod GENÉRICO con scripts UE4SS? Pasa cuando el
+      // archivo trae paks para ~mods y UE4SS, pero ningún pak para LogicMods
+      // (sin ModActor). Entonces no tiene sentido crear una carpeta en
+      // LogicMods solo para guardar nexus_info.json y la portada: el mod se
+      // instala como genericPak -su carpeta es ~mods/<mod_name>- y sus
+      // scripts UE4SS se registran como componentes (ue4ssComponents /
+      // ue4ssLooseFiles) para que activar, desactivar y borrar los muevan.
+      final bool asGeneric = !isAtoolTool &&
+          tildeModsSourceDir != null &&
+          await tildeModsSourceDir.exists() &&
+          !await _dirHasPackageFiles(logicSourceDir);
+      if (asGeneric) fitMeshType = "Generic";
+
+      // Ruta final de la carpeta del mod:
+      //   logic   -> .../Paks/LogicMods/<mod_name>
+      //   generic -> .../Paks/~mods/<mod_name>
+      final logicModDestPath =
+          p.join(asGeneric ? tildeModsDestPath : installPath, finalFolderName);
 
       // --- 2. Lógica de Reemplazo ---
       // La "carpeta del mod" que gestionamos (activar/desactivar) es la de LogicMods.
@@ -2894,7 +3167,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       // 1) Mismo archivo de Nexus (file_id) o una versión anterior de él
       oldVersionMod = await _findInstalledByFileLineage(
         preparedMod,
-        _allMods.where((mod) => mod.modType == 'logicMod' && mod.nexusId == nexusId),
+        _allMods.where((mod) => _canHaveExtraParts(mod) && mod.nexusId == nexusId),
       );
       // 2) Si no, un mod existente con el mismo nombre Y que sea 'logicMod'
       if (oldVersionMod == null) {
@@ -2902,7 +3175,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           oldVersionMod = _allMods.firstWhere(
             (mod) =>
                 mod.displayName == baseDisplayName &&
-                mod.modType == 'logicMod' &&
+                _canHaveExtraParts(mod) &&
                 // Un mod de OTRO ID de Nexus nunca es una versión anterior.
                 (mod.nexusId == null ||
                     nexusId == null ||
@@ -2958,7 +3231,10 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                 HdAtoolAudio.gameAudioPath(installPath),
               );
             }
-            // Borramos la carpeta de LogicMods antigua
+            // Una versión anterior tipo logic con paks en ~mods: quitar también
+            // esa carpeta, que queda fuera de la del mod.
+            await _removeOldTildeComponent(oldVersionMod);
+            // Borramos la carpeta del mod antigua
             final deleted = await FileManagerService.deleteDirectoryWithRetry(
               oldVersionMod.directory,
             );
@@ -3036,12 +3312,15 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       // Parte A2: audios de HD-ATOOL (si el mod trae _hd_atool_audio) ->
       // .../Paks/LogicMods/HD-ATOOL_P/audio. Se recuerdan en nexus_info.json.
       // HD-ATOOL: devolver los audios de otros mods que había en su carpeta
-      await HdAtoolAudio.restoreAudio(atoolAudioStash, Directory(logicModDestPath));
-      if (!isAtoolTool) await HdAtoolAudio.adoptInPlace(Directory(logicModDestPath));
-      final List<String> hdAtoolAudioNames = await HdAtoolAudio.activate(
-        Directory(logicModDestPath),
-        HdAtoolAudio.gameAudioPath(installPath),
-      );
+      List<String> hdAtoolAudioNames = [];
+      if (!asGeneric) {
+        await HdAtoolAudio.restoreAudio(atoolAudioStash, Directory(logicModDestPath));
+        if (!isAtoolTool) await HdAtoolAudio.adoptInPlace(Directory(logicModDestPath));
+        hdAtoolAudioNames = await HdAtoolAudio.activate(
+          Directory(logicModDestPath),
+          HdAtoolAudio.gameAudioPath(installPath),
+        );
+      }
 
       // Parte B: Copiar componentes de UE4SS (Carpetas de mods y archivos sueltos raíz)
       List<String> ue4ssComponentFolders = [];
@@ -3090,11 +3369,17 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       
       bool hasTildeModsComponent = false;
       if (tildeModsSourceDir != null && await tildeModsSourceDir.exists()) {
-        final tildeModDestPathWithFolder = p.join(tildeModsDestPath, finalFolderName);
-        hasTildeModsComponent = true;
-        final destDir = Directory(tildeModDestPathWithFolder);
-        if (!await destDir.exists()) await destDir.create(recursive: true);
-        await FileManagerService.copyDirectory(tildeModsSourceDir, destDir);
+        if (asGeneric) {
+          // Los paks van DENTRO de la carpeta del mod (~mods/<mod_name>).
+          await FileManagerService.copyDirectory(
+              tildeModsSourceDir, Directory(logicModDestPath));
+        } else {
+          final tildeModDestPathWithFolder = p.join(tildeModsDestPath, finalFolderName);
+          hasTildeModsComponent = true;
+          final destDir = Directory(tildeModDestPathWithFolder);
+          if (!await destDir.exists()) await destDir.create(recursive: true);
+          await FileManagerService.copyDirectory(tildeModsSourceDir, destDir);
+        }
       }
 
       // --- 5. Crear nexus_info.json ---
@@ -3114,7 +3399,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         'installDate': DateTime.now().toIso8601String(),
         'managerVersion': _appVersion,
         'fitMeshType': fitMeshType,
-        'modType': modType.name,
+        'modType': asGeneric ? ModDirectoryType.genericPak.name : modType.name,
         'sourceUrl': nexusId != null ? 'https://www.nexusmods.com/stellarblade/mods/$nexusId' : null,
         'tildeModsComponentFolder': hasTildeModsComponent ? finalFolderName : null,
         'ue4ssComponents': ue4ssComponentFolders.isNotEmpty ? ue4ssComponentFolders : null,
@@ -3171,33 +3456,26 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       fitMeshType = null;
       installPath = backupDirPath;
 
-      // Parseamos la estructura del mod (archivos principales y subcarpetas)
-      final movieData = await MovieModsHandler.parseMovieMod(preparedMod.archiveName, modDir);
-      
-      // FORZAMOS LA SELECCIÓN: Marcamos todas las opciones como 'true' automáticamente
-      for (var option in movieData.options) {
-        option.isSelected = true;
-      }
-
-      // Usamos tu handler para que consolide TODOS los vídeos en una sola carpeta plana temporal
-      final tempRoot = Directory.systemTemp.createTempSync('mod_movie_');
-      modDir = await SpecialModsHandler.buildSelectedInstallation(movieData, tempRoot);
-
-      // Ahora que todos los archivos están en la raíz de modDir, simplemente guardamos sus nombres
-      await for (final entity in modDir.list(recursive: false)) {
-        if (entity is File) {
-          final ext = p.extension(entity.path).toLowerCase();
-          if (ext == '.bk2' || ext == '.webm') {
-            // Guardamos solo el nombre del archivo (basename) porque ya no hay subcarpetas
-            replacedFiles.add(p.basename(entity.path));
-          }
+      // Se conserva la estructura relativa a la carpeta Movies del juego (Movies/Menu...).
+      // Solo se pregunta si el archivo trae variantes excluyentes (mismo vídeo en
+      // varias carpetas); en cualquier otro caso se instala todo.
+      final movieAnalysis = await MovieModsHandler.analyze(preparedMod.archiveName, modDir);
+      final movieChoice = movieAnalysis.choice;
+      if (movieChoice != null) {
+        final confirmed = await SpecialModSelectionDialog.show(context, movieChoice);
+        if (!confirmed) {
+          throw Exception(l10n.statusInstallationCancelledByUser);
         }
       }
-      
+      selectedMovieFiles = MovieModsHandler.resolveSelection(movieAnalysis);
+      for (final movieFile in selectedMovieFiles) {
+        replacedFiles.add(movieFile.rel);
+      }
+
       if (replacedFiles.isEmpty) {
         throw Exception(l10n.errorMoviesModNoValidFiles);
       }
-    } 
+    }
     else if (modType == ModDirectoryType.save) {
       baseDisplayName = preparedMod.archiveName;
       fitMeshType = "Save Game";
@@ -3488,6 +3766,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           : null,
       'replacesOutfits': autoOutfits ??
           (selectedOutfit != null ? [selectedOutfit] : null),
+      // Detección automática: se marca para poder reanalizarlo si el detector
+      // mejora (una selección manual no lleva marca y nunca se reescribe).
+      if (autoOutfits != null) ...{
+        ModMetadataMigrator.outfitsAutoDetectedKey: true,
+        'outfitScanSchema': ModMetadataMigrator.outfitScanSchema,
+      },
     };
     // Limpia valores nulos para no ensuciar el JSON
     modData.removeWhere((key, value) => value == null);
@@ -3508,8 +3792,15 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
 
     // 5. COPIAR ARCHIVOS (Usando la función auxiliar que ya tenías)
     List<File> filesToInstall = [];
-    if (modType == ModDirectoryType.movies ||
-        modType == ModDirectoryType.save ||
+    if (modType == ModDirectoryType.movies) {
+      // Los vídeos se guardan con su ruta relativa (no se aplanan) para poder
+      // reproducir exactamente la estructura de Movies al activar el mod.
+      for (final movieFile in selectedMovieFiles) {
+        final movieDest = File(p.joinAll([newModPath, ...movieFile.rel.split('/')]));
+        await movieDest.parent.create(recursive: true);
+        await movieFile.file.copy(movieDest.path);
+      }
+    } else if (modType == ModDirectoryType.save ||
         modType == ModDirectoryType.config ||
         modType == ModDirectoryType.splash) {
       for (final fileName in replacedFiles) {
@@ -3798,8 +4089,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         final backupContainerDir = modInfo.directory;
 
         // ++ INICIO DE LA MODIFICACIÓN ++
-        // 1. Restaurar componentes adicionales si es un LogicMod
-        if (modInfo.modType == 'logicMod') {
+        // 1. Restaurar componentes adicionales (logic, o genérico con UE4SS)
+        if (_canHaveExtraParts(modInfo)) {
           // Leer el JSON desde su ubicación actual (dentro del respaldo)
           final infoFile = File(
             p.join(backupContainerDir.path, 'nexus_info.json'),
@@ -4005,8 +4296,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         }
 
         // ++ INICIO DE LA MODIFICACIÓN ++
-        // 2. Mover componentes adicionales si es un LogicMod
-        if (modInfo.modType == 'logicMod') {
+        // 2. Mover componentes adicionales (logic, o genérico con UE4SS)
+        if (_canHaveExtraParts(modInfo)) {
           // Leer el JSON desde su *nueva* ubicación (dentro del respaldo)
           final infoFile = File(p.join(newDirectory.path, 'nexus_info.json'));
           if (await infoFile.exists()) {
@@ -4108,11 +4399,37 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     }
   }
 
+  /// Texto de error de un [MovieModException] (usa los textos ya traducidos cuando existen).
+  String _movieErrorText(MovieModException e, AppLocalizations l10n) {
+    switch (e.code) {
+      case MovieErrorCode.pathsNotDefined:
+        return l10n.errorMoviesPathsNotDefined;
+      case MovieErrorCode.noValidFiles:
+        return l10n.errorMoviesModNoValidFiles;
+      case MovieErrorCode.requires529:
+        return l10n.errorModRequires529;
+      case MovieErrorCode.menuLimit:
+        return l10n.errorMenuVideoLimitReached;
+      case MovieErrorCode.backupFailed:
+        return 'Could not back up the original movie (${e.detail}). Nothing was changed.';
+      case MovieErrorCode.verifyFailed:
+        return 'The copied movie did not pass verification (${e.detail}). Nothing was changed.';
+      case MovieErrorCode.copyFailed:
+        return 'Could not write the movie files (${e.detail}). Close the game and try again.';
+    }
+  }
+
   /// Lógica específica para HABILITAR un mod de tipo "Movies".
+  ///
+  ///  - Reemplaza los vídeos originales de Movies (con respaldo previo) y anexa los nuevos.
+  ///  - Si otro mod de películas activo ocupa alguno de esos archivos, se desactiva ENTERO
+  ///    antes de aplicar (así sus originales se restauran y el respaldo es siempre el original).
+  ///  - Con el Mod 529 activo, los vídeos "de menú" van a Movies/Menu/menu_N.
+  ///  - Es transaccional: si algo falla, se deshace lo ya copiado.
   Future<void> _enableMovieMod(ModInfo modInfo, List<ModInfo> allMods) async {
     final l10n = AppLocalizations.of(context)!;
     if (_moviesPath == null || _moviesBackupPath == null) {
-      throw Exception(AppLocalizations.of(context)!.errorMoviesPathsNotDefined);
+      throw Exception(l10n.errorMoviesPathsNotDefined);
     }
 
     final infoFile = File(p.join(modInfo.directory.path, 'nexus_info.json'));
@@ -4120,171 +4437,164 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       throw Exception(l10n.errorNexusInfoNotFoundForMod(modInfo.customName));
     }
 
-    final data = json.decode(await infoFile.readAsString());
+    final data = Map<String, dynamic>.from(json.decode(await infoFile.readAsString()));
     final List<String> rawFiles = List<String>.from(data['replacedFiles'] ?? []);
-    
+    final moviesDir = Directory(_moviesPath!);
+    final backupDir = Directory(_moviesBackupPath!);
+
     // Verificamos dinámicamente si el Mod 529 está presente y activado
     final bool hasMod529 = allMods.any((m) => m.nexusId == '529' && m.isEnabled);
-    
-    // Archivos finales que realmente se copiaron (útil para el uninstall)
-    List<String> actuallyInstalledFiles = [];
 
-    if (hasMod529) {
-      // ==== MÉTODO CARPETA MENU (Soporta .bk2 y .webm) ====
-      final menuDir = Directory(p.join(_moviesPath!, 'Menu'));
-      if (!await menuDir.exists()) await menuDir.create();
-
-      // Compactamos la carpeta antes de inyectar nada nuevo
-      int nextIndex = await MovieModsHandler.getNextAvailableIndex(menuDir);
-
-      // Descubrimos cuál es el siguiente número disponible
-      
-
-      // FILTRADO INTELIGENTE PARA MODS HÍBRIDOS
-      List<String> classicCandidates = [];
-      List<String> menuCandidates = [];
-
-      for (final path in rawFiles) {
-        final basename = p.basename(path).toLowerCase();
-        if (basename == 'eve_title.bk2' || basename == 'eve_title_fusion.bk2') {
-          classicCandidates.add(path);
-        } else {
-          menuCandidates.add(path); // Asumimos que cualquier otra cosa es para el menú
-        }
-      }
-
-      // Si el mod tiene archivos específicos de menú, preferimos esos.
-      // Si solo tiene archivos clásicos, los reutilizamos para el menú.
-      List<String> filesToProcess = menuCandidates.isNotEmpty ? menuCandidates : classicCandidates;
-
-      for (final relativePath in filesToProcess) {
-        if (nextIndex > 99) {
-          throw Exception(AppLocalizations.of(context)!.errorMenuVideoLimitReached);
-        }
-        final sourceFile = File(p.join(modInfo.directory.path, relativePath));
-        if (await sourceFile.exists()) {
-          final ext = p.extension(sourceFile.path).toLowerCase();
-          final newName = 'menu_$nextIndex$ext';
-          final targetFile = File(p.join(menuDir.path, newName));
-          
-          await sourceFile.copy(targetFile.path);
-          actuallyInstalledFiles.add(newName); // Guardamos solo el nombre asignado
-          nextIndex++;
-        }
-      }
-      data['isMenuMode'] = true;
-
-    } else {
-      // ==== MÉTODO CLÁSICO REEMPLAZO (Solo .bk2) ====
-      List<File> fileObjects = rawFiles
-        .map((path) => File(p.join(modInfo.directory.path, path)))
-        .where((f) => f.existsSync())
-        .toList();
-
-      final mappings = MovieModsHandler.mapFilesForClassicReplacement(fileObjects);
-      
-      if (mappings.isEmpty) {
-        throw Exception(AppLocalizations.of(context)!.errorModRequires529);
-      }
-
-      // Aplicar exclusividad clásica (apagar mods conflictivos)
-      final Set<String> targetNames = mappings.values.toSet();
-      for (final otherMod in allMods) {
-        if (otherMod.directory.path == modInfo.directory.path || !otherMod.isEnabled || otherMod.modType != 'movies') {
+    try {
+      // 1) Qué ocupan ahora los demás mods de películas activos
+      final otherEntries = <String, List<MovieInstalledEntry>>{};
+      for (final other in allMods) {
+        if (other.directory.path == modInfo.directory.path ||
+            !other.isEnabled ||
+            other.modType != 'movies') {
           continue;
         }
-        final otherInfoFile = File(p.join(otherMod.directory.path, 'nexus_info.json'));
-        if (!await otherInfoFile.exists()) continue;
-
         try {
-          final otherData = json.decode(await otherInfoFile.readAsString());
-          final List<String> otherActiveFiles = List<String>.from(otherData['activeInstalledFiles'] ?? []);
-          
-          bool hasConflict = otherActiveFiles.any((file) => targetNames.contains(file));
-          if (hasConflict) {
-             print("Disabling conflicting movie mod: ${otherMod.customName}");
-             await _disableMovieMod(otherMod);
-             final modIndex = allMods.indexWhere((m) => m.directory.path == otherMod.directory.path);
-             if (modIndex != -1) allMods[modIndex] = otherMod.copyWith(isEnabled: false);
-          }
+          final otherInfo = File(p.join(other.directory.path, 'nexus_info.json'));
+          if (!await otherInfo.exists()) continue;
+          final otherData = Map<String, dynamic>.from(json.decode(await otherInfo.readAsString()));
+          otherEntries[other.directory.path] = MovieModsHandler.entriesFromInfo(otherData);
         } catch (e) {
-          print("Error checking movie conflict: $e");
+          print('Error reading movie mod state: $e');
+        }
+      }
+      final ownedAdd = <String>{};
+      for (final entries in otherEntries.values) {
+        ownedAdd.addAll(MovieModsHandler.ownedAddKeys(entries));
+      }
+
+      // 2) Plan (no toca el disco)
+      final plan = await MovieModsHandler.buildPlan(
+        modDir: modInfo.directory,
+        files: rawFiles,
+        hasMod529: hasMod529,
+        moviesDir: moviesDir,
+        ownedAddKeys: ownedAdd,
+      );
+      if (plan.isEmpty) {
+        throw MovieModException(
+          hasMod529 ? MovieErrorCode.noValidFiles : MovieErrorCode.requires529,
+        );
+      }
+
+      // 3) Exclusividad: se desactiva cualquier mod activo que pise alguno de estos archivos
+      final targetKeys = plan.rootKeys;
+      for (final other in allMods) {
+        final entries = otherEntries[other.directory.path];
+        if (entries == null) continue;
+        if (MovieModsHandler.ownedRootKeys(entries).any(targetKeys.contains)) {
+          print('Disabling conflicting movie mod: ${other.customName}');
+          await _disableMovieMod(other);
+          final modIndex = allMods.indexWhere((m) => m.directory.path == other.directory.path);
+          if (modIndex != -1) allMods[modIndex] = other.copyWith(isEnabled: false);
         }
       }
 
-      // Hacer backups y reemplazar
-      for (var entry in mappings.entries) {
-        final sourceFile = entry.key;
-        final targetName = entry.value;
-        final gameFile = File(p.join(_moviesPath!, targetName));
-        final backupFile = File(p.join(_moviesBackupPath!, '$targetName.bak'));
+      // 4) Respaldo + copia verificada (con rollback si falla)
+      final installed = await MovieModsHandler.apply(
+        plan: plan,
+        moviesDir: moviesDir,
+        backupDir: backupDir,
+        modDir: modInfo.directory,
+      );
 
-        if (await gameFile.exists() && !await backupFile.exists()) {
-          await gameFile.copy(backupFile.path);
-        }
-
-        await sourceFile.copy(gameFile.path);
-        actuallyInstalledFiles.add(targetName);
-      }
-      data['isMenuMode'] = false;
+      data['isEnabled'] = true;
+      data['isMenuMode'] = installed.any((e) => e.isMenu);
+      data['activeInstalledFiles'] = installed.map((e) => e.rel).toList();
+      data['movieInstall'] = {
+        'schema': 2,
+        'entries': installed.map((e) => e.toJson()).toList(),
+      };
+      final encoder = JsonEncoder.withIndent('  ');
+      await infoFile.writeAsString(encoder.convert(data));
+    } on MovieModException catch (e) {
+      throw Exception(_movieErrorText(e, l10n));
     }
-
-    data['isEnabled'] = true;
-    data['activeInstalledFiles'] = actuallyInstalledFiles; // Guardamos lo que realmente se instaló en el juego
-    final encoder = JsonEncoder.withIndent('  ');
-    await infoFile.writeAsString(encoder.convert(data));
   }
 
   /// Lógica específica para DESHABILITAR un mod de tipo "Movies".
+  /// Restaura los originales desde el respaldo y borra lo que el mod anexó.
   Future<void> _disableMovieMod(ModInfo modInfo) async {
+    final l10n = AppLocalizations.of(context)!;
     if (_moviesPath == null || _moviesBackupPath == null) {
-      throw Exception(AppLocalizations.of(context)!.errorMoviesPathsNotDefined);
+      throw Exception(l10n.errorMoviesPathsNotDefined);
     }
 
     final infoFile = File(p.join(modInfo.directory.path, 'nexus_info.json'));
     if (!await infoFile.exists()) {
-      throw Exception(AppLocalizations.of(context)!.errorNexusInfoNotFoundForMod(modInfo.customName));
+      throw Exception(l10n.errorNexusInfoNotFoundForMod(modInfo.customName));
     }
 
-    final data = json.decode(await infoFile.readAsString());
-    final bool isMenuMode = data['isMenuMode'] ?? false;
-    final List<String> activeFiles = List<String>.from(data['activeInstalledFiles'] ?? []);
+    final data = Map<String, dynamic>.from(json.decode(await infoFile.readAsString()));
+    final entries = MovieModsHandler.entriesFromInfo(data);
 
-    if (isMenuMode) {
-      // ==== MODO MENÚ ====
-      final menuDir = Directory(p.join(_moviesPath!, 'Menu'));
-      if (await menuDir.exists()) {
-        for (final fileName in activeFiles) {
-          final installedFile = File(p.join(menuDir.path, fileName));
-          if (await installedFile.exists()) {
-            await installedFile.delete();
-          }
-        }
-        // Tras borrar, reordenamos la carpeta para cerrar huecos
-        if (await menuDir.list().isEmpty) {
-           await menuDir.delete();
-        }
+    try {
+      final report = await MovieModsHandler.remove(
+        entries: entries,
+        moviesDir: Directory(_moviesPath!),
+        backupDir: Directory(_moviesBackupPath!),
+      );
+      if (report.missingBackups.isNotEmpty && mounted) {
+        NotificationService.instance.show(
+          context: context,
+          type: NotificationType.error,
+          title: modInfo.customName,
+          description:
+              'The backup of the original movie is missing for: ${report.missingBackups.join(', ')}. '
+              'The file was left untouched; use "Verify integrity of game files" in Steam to restore it.',
+        );
       }
-    } else {
-      // ==== MODO REEMPLAZO CLÁSICO ====
-      for (final fileName in activeFiles) {
-        final gameFile = File(p.join(_moviesPath!, fileName));
-        final backupFile = File(p.join(_moviesBackupPath!, '$fileName.bak'));
-
-        if (await backupFile.exists()) {
-          await backupFile.copy(gameFile.path);
-        } else {
-          if (await gameFile.exists()) {
-            await gameFile.delete();
-          }
-        }
-      }
+    } on MovieModException catch (e) {
+      throw Exception(_movieErrorText(e, l10n));
     }
 
     data['isEnabled'] = false;
     data.remove('activeInstalledFiles'); // Limpiamos el rastro
+    data.remove('movieInstall');
+    data.remove('isMenuMode');
     final encoder = JsonEncoder.withIndent('  ');
     await infoFile.writeAsString(encoder.convert(data));
+  }
+
+  /// Comprueba que los mods de películas marcados como activos siguen realmente
+  /// aplicados en el juego (Steam "verificar archivos", actualización, borrado manual).
+  /// Si no, se desactivan limpiamente para que el estado de la app sea real.
+  Future<void> _reconcileMovieMods() async {
+    if (_moviesPath == null || _moviesBackupPath == null) return;
+    final activeMovieMods =
+        _allMods.where((m) => m.modType == 'movies' && m.isEnabled).toList();
+    if (activeMovieMods.isEmpty) return;
+
+    bool changed = false;
+    for (final mod in activeMovieMods) {
+      try {
+        final infoFile = File(p.join(mod.directory.path, 'nexus_info.json'));
+        if (!await infoFile.exists()) continue;
+        final data = Map<String, dynamic>.from(json.decode(await infoFile.readAsString()));
+        final stillApplied = await MovieModsHandler.isStillApplied(
+          entries: MovieModsHandler.entriesFromInfo(data),
+          moviesDir: Directory(_moviesPath!),
+          modDir: mod.directory,
+        );
+        if (stillApplied) continue;
+
+        print('Movie mod no longer applied in the game, disabling: ${mod.customName}');
+        await _disableMovieMod(mod);
+        final i = _allMods.indexWhere((m) => m.directory.path == mod.directory.path);
+        if (i != -1) {
+          _allMods[i] = mod.copyWith(isEnabled: false);
+          changed = true;
+        }
+      } catch (e) {
+        print('Error verifying movie mod ${mod.customName}: $e');
+      }
+    }
+    if (changed && mounted) setState(() {});
   }
 
   /// Lógica específica para HABILITAR un mod de tipo "Splash".
@@ -4796,25 +5106,9 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     try {
       int deletedCount = 0;
       for (final mod in disabledMods) {
-        // Limpieza de backups para mods de películas
-        if (mod.modType == 'movies') {
-          final infoFile = File(p.join(mod.directory.path, 'nexus_info.json'));
-          if (await infoFile.exists() && _moviesBackupPath != null) {
-            try {
-              final data = json.decode(await infoFile.readAsString());
-              final List<String> replacedFiles = List<String>.from(data['replacedFiles'] ?? []);
-              for (final fileName in replacedFiles) {
-                final backupFile = File(p.join(_moviesBackupPath!, '$fileName.bak'));
-                if (await backupFile.exists()) {
-                  await backupFile.delete();
-                }
-              }
-            } catch (e) {
-              print(l10n.logErrorCleaningVideoBackups(mod.customName, e.toString()));
-            }
-          }
-        }
-
+        // Los respaldos de __MOVIES_ORIGINALS__ NO se borran: son los originales del
+        // juego y los comparten todos los mods de películas (otro mod activo puede
+        // seguir necesitándolos para restaurar).
         // Eliminación del directorio principal
         if (await FileManagerService.deleteDirectoryWithRetry(mod.directory)) {
           deletedCount++;
@@ -4837,6 +5131,55 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       await _loadAllMods();
       setState(() => _isLoading = false);
     }
+  }
+
+  /// Abre la carpeta de un mod donde están DE VERDAD sus archivos. Un mod con
+  /// partes (blueprint, paks en ~mods, scripts UE4SS) puede tener varias: si
+  /// es así se deja elegir. Con el mod desactivado todo está en su respaldo.
+  Future<void> _showModInExplorer(ModInfo mod) async {
+    List<ModLocation> locations;
+    try {
+      locations = await ModLocationsService.resolve(
+        mod,
+        genericModsPath: _genericModsPath,
+        ue4ssModsPath: _ue4ssModsPath,
+        moviesPath: _moviesPath,
+        savesPath: _savesPath,
+        configPath: _configPath,
+        splashPath: _splashPath,
+      );
+    } catch (_) {
+      locations = const [];
+    }
+    if (locations.isEmpty) {
+      await _showInExplorer(mod.directory);
+      return;
+    }
+    if (locations.length == 1) {
+      await _revealLocation(locations.first);
+      return;
+    }
+    if (!mounted) return;
+    // El diálogo queda abierto: cada clic abre su carpeta.
+    await ModLocationPicker.show(context, locations, onOpen: _revealLocation);
+  }
+
+  /// Abre una ubicación; un archivo suelto se abre seleccionado en su carpeta.
+  Future<void> _revealLocation(ModLocation loc) async {
+    if (loc.isFile && Platform.isWindows) {
+      try {
+        // OJO: '/select,' y la ruta van como argumentos SEPARADOS. Si se pasan
+        // juntos ('/select,C:\\Mi carpeta\\x') y la ruta tiene espacios, Dart
+        // entrecomilla todo el argumento y el Explorador abre Documentos.
+        // explorer devuelve código 1 aunque funcione: no se comprueba.
+        await Process.run(
+            'explorer.exe', ['/select,', p.normalize(loc.path)]);
+        return;
+      } catch (_) {}
+    }
+    await _showInExplorer(
+      Directory(loc.isFile ? p.dirname(loc.path) : loc.path),
+    );
   }
 
   Future<void> _showInExplorer(Directory modDirectory) async {
@@ -4875,15 +5218,18 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     });
   }
 
+  /// Guarda el idioma elegido y lo aplica a toda la app al instante.
+  Future<void> _setLanguage(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppPrefs.languageCode, code);
+    if (mounted) ModInstallerApp.setLocale(context, Locale(code));
+  }
+
   void _showLanguageDialog() {
     SettingsDialogs.language(
       context,
       current: Localizations.localeOf(context).languageCode,
-      onSelected: (code) async {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('languageCode', code);
-        if (mounted) ModInstallerApp.setLocale(context, Locale(code));
-      },
+      onSelected: _setLanguage,
     );
   }
 
@@ -4902,6 +5248,88 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     );
   }
 
+  /// Abre la página de Ajustes. Con [startOnApiKey] entra directamente en
+  /// "Conectividad y actualizaciones" y abre el diálogo de la API key.
+  Future<void> _openSettings({bool startOnApiKey = false}) {
+    return Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SettingsPage(
+          initialGameRootPath: _gameRootPath,
+          initialSevenZipPath: _7zipPath,
+          initialApiKey: _apiKey,
+          skippedVersions: _skippedVersions,
+          // Pasar los nuevos estados y funciones a la página de configuración
+          isUe4ssInstalled: _isUe4ssInstalled,
+          isCnsCoreInstalled: _isCnsCoreInstalled,
+          onUninstallUE4SS: () =>
+              _uninstallCoreComponent(isUe4ss: true),
+          onUninstallCNS: () =>
+              _uninstallCoreComponent(isUe4ss: false),
+          // Resto de callbacks
+          onSelectGamePath: _selectGamePathManually,
+          onSelect7zipPath: _select7zipPathManually,
+          onShowApiKeyDialog: _showApiKeyDialog,
+          onManageSkippedVersions: _manageSkippedVersions,
+          onShowLanguageDialog: _showLanguageDialog,
+          onDeleteAllNexusInfo: _deleteAllNexusInfoFiles,
+          onExtractModIds: _extractModIdentifiers,
+          onTestSelfUpdate: _testSelfUpdate,
+          isDeveloperModeEnabled: _developerModeEnabled,
+          initialShowModTypeTags: _showModTypeTags,
+          onShowModTypeTagsChanged: (newValue) async {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool(AppPrefs.showModTypeTags, newValue);
+            setState(() {
+              _showModTypeTags = newValue;
+            });
+          },
+          initialAutoAssignOutfits: _autoAssignOutfits,
+          onAutoAssignOutfitsChanged: (newValue) async {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool(AppPrefs.autoAssignOutfits, newValue);
+            setState(() {
+              _autoAssignOutfits = newValue;
+            });
+          },
+          onShowAboutDialog: _showAboutDialog,
+          onRefreshMetadata: _refreshAllMetadata,
+          onRunSelfHealing: _showSelfHealConfirmationDialog,
+          onRepairGameStartup: _runGameStartupRepair,
+          onRunConflictPatcher: _runConflictPatcher,
+          onRevertConflictPatches: _revertConflictPatches,
+            startOnApiKey: startOnApiKey,
+        ),
+      ),
+    );
+  }
+
+  /// Aviso (una vez por sesión) que invita a configurar la API key de Nexus
+  /// cuando no hay ninguna. Se puede omitir y silenciar para siempre con la
+  /// casilla "No volver a mostrar este mensaje".
+  bool _apiKeyPromptHandled = false;
+
+  Future<void> _maybeShowApiKeyPrompt() async {
+    if (_apiKeyPromptHandled || !mounted) return;
+    _apiKeyPromptHandled = true;
+    if (_apiKey != null && _apiKey!.isNotEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(AppPrefs.hideApiKeyPrompt) ?? false) return;
+    if (!mounted) return;
+
+    final result = await SettingsDialogs.apiKeyPrompt(
+      context,
+      onLanguageChanged: _setLanguage,
+    );
+    if (result.dontShowAgain) {
+      await prefs.setBool(AppPrefs.hideApiKeyPrompt, true);
+    }
+    if (result.configure && mounted) {
+      await _openSettings(startOnApiKey: true);
+    }
+  }
+
   Future<String?> _showApiKeyDialog() {
     final l10n = AppLocalizations.of(context)!;
     return SettingsDialogs.apiKey(
@@ -4912,10 +5340,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           if (mounted) {
             setState(() {
               _nexusUserName = null;
-              _isNexusPremium = false;
+              _nexusPlan = NexusPlan.member;
               _nexusAvatarUrl = null;
             });
           }
+          DownloadManager.instance.userPlan = NexusPlan.member;
+          final clearPrefs = await SharedPreferences.getInstance();
+          await clearPrefs.setString('nexus_plan', NexusPlan.member.name);
           await _saveApiKey('');
           if (mounted) {
             NotificationService.instance.show(
@@ -4934,15 +5365,15 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         if (mounted) {
           setState(() {
             _nexusUserName = profileData['name'];
-            _isNexusPremium = profileData['isPremium'] == true;
+            _nexusPlan = profileData['plan'] as NexusPlan;
             _nexusAvatarUrl = profileData['profileUrl'];
           });
         }
         await _saveApiKey(key);
-        final isPremium = profileData['isPremium'] == true;
+        final plan = profileData['plan'] as NexusPlan;
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_premium', isPremium);
-        DownloadManager.instance.isUserPremium = isPremium;
+        await prefs.setString('nexus_plan', plan.name);
+        DownloadManager.instance.userPlan = plan;
 
         if (mounted) {
           NotificationService.instance.show(
@@ -5746,7 +6177,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         break;
       case ModTypeFilter.generic:
         // Ahora solo busca mods marcados explícitamente como 'genericPak'
-        mods.retainWhere((mod) => mod.modType == 'genericPak');
+        mods.retainWhere((mod) => mod.displayType == 'genericPak');
         break;
       case ModTypeFilter.replacement:
         // Ahora busca mods marcados explícitamente como 'replacement'
@@ -5758,7 +6189,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         mods.retainWhere((mod) => mod.modType == 'movies');
         break;
       case ModTypeFilter.logicMod:
-        mods.retainWhere((mod) => mod.modType == 'logicMod');
+        mods.retainWhere((mod) => mod.displayType == 'logicMod');
         break;
       case ModTypeFilter.save:
         mods.retainWhere((mod) => mod.modType == 'save');
@@ -5968,56 +6399,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           IosToolbarButton(
             icon: const HugeIcon(icon: HugeIcons.strokeRoundedSetting07, color: IosColors.icon, size: 20.0),
             tooltip: l10n.settings,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SettingsPage(
-                    initialGameRootPath: _gameRootPath,
-                    initialSevenZipPath: _7zipPath,
-                    initialApiKey: _apiKey,
-                    skippedVersions: _skippedVersions,
-                    // Pasar los nuevos estados y funciones a la página de configuración
-                    isUe4ssInstalled: _isUe4ssInstalled,
-                    isCnsCoreInstalled: _isCnsCoreInstalled,
-                    onUninstallUE4SS: () =>
-                        _uninstallCoreComponent(isUe4ss: true),
-                    onUninstallCNS: () =>
-                        _uninstallCoreComponent(isUe4ss: false),
-                    // Resto de callbacks
-                    onSelectGamePath: _selectGamePathManually,
-                    onSelect7zipPath: _select7zipPathManually,
-                    onShowApiKeyDialog: _showApiKeyDialog,
-                    onManageSkippedVersions: _manageSkippedVersions,
-                    onShowLanguageDialog: _showLanguageDialog,
-                    onDeleteAllNexusInfo: _deleteAllNexusInfoFiles,
-                    onExtractModIds: _extractModIdentifiers,
-                    isDeveloperModeEnabled: _developerModeEnabled,
-                    initialShowModTypeTags: _showModTypeTags,
-                    onShowModTypeTagsChanged: (newValue) async {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setBool(AppPrefs.showModTypeTags, newValue);
-                      setState(() {
-                        _showModTypeTags = newValue;
-                      });
-                    },
-                    initialAutoAssignOutfits: _autoAssignOutfits,
-                    onAutoAssignOutfitsChanged: (newValue) async {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setBool(AppPrefs.autoAssignOutfits, newValue);
-                      setState(() {
-                        _autoAssignOutfits = newValue;
-                      });
-                    },
-                    onShowAboutDialog: _showAboutDialog,
-                    onRunSelfHealing: _showSelfHealConfirmationDialog,
-                    onRepairGameStartup: _runGameStartupRepair,
-                    onRunConflictPatcher: _runConflictPatcher,
-                    onRevertConflictPatches: _revertConflictPatches,
-                  ),
-                ),
-              );
-            },
+            onPressed: () => _openSettings(),
           ),
           const SizedBox(width: 10),
         ],
@@ -6290,8 +6672,9 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       }
     },
     onSetCoverTap: () => _setCustomCover(modInfo),
+    onAdjustCoverTap: () => _adjustCover(modInfo),
     onRevertCoverTap: () => _revertToDefaultCover(modInfo),
-    onShowFolderTap: () => _showInExplorer(modInfo.directory),
+    onShowFolderTap: () => _showModInExplorer(modInfo),
     onShowGalleryTap: () => _showImageGalleryDialog(modInfo),
     onOpenNexusTap: () async {
       if (modInfo.nexusId != null) {
@@ -6348,7 +6731,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         _performSurgicalUpdate(updatedMod);
       }
     },
-    onShowFolderTap: () => _showInExplorer(modInfo.directory),
+    onAdjustCoverTap: () => _adjustCover(modInfo),
+    onShowFolderTap: () => _showModInExplorer(modInfo),
     onShowGalleryTap: () => _showImageGalleryDialog(modInfo),
     onOpenNexusTap: () async {
       if (modInfo.nexusId != null) {
@@ -6463,7 +6847,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                   ? null
                   : () {
                       if (_finalModsPath != null) {
-                        _showInExplorer(Directory(_finalModsPath!));
+                        _showInExplorer(Directory(_genericModsPath!));
                       }
                     },
             ),
@@ -6638,6 +7022,96 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     }
   }
 
+  /// Reajusta el encuadre de la portada que el mod muestra ahora: la
+  /// personalizada si la tiene, o la de Nexus (`_nexus_cover.*`). Si la portada
+  /// de Nexus aún no está en disco se descarga primero. Devuelve el mod
+  /// recargado, o null si no se cambió nada.
+  Future<ModInfo?> _adjustCover(ModInfo mod) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final infoFile = File(p.join(mod.directory.path, 'nexus_info.json'));
+      Map<String, dynamic> data = {};
+      if (await infoFile.exists()) {
+        final content = await infoFile.readAsString();
+        if (content.isNotEmpty) data = json.decode(content);
+      }
+
+      // 1. Portada actual en disco (personalizada o `_nexus_cover.*`).
+      String? coverName = data['customCoverPath'] as String?;
+      File? coverFile;
+      if (coverName != null && coverName.isNotEmpty) {
+        final f = File(p.join(mod.directory.path, coverName));
+        if (await f.exists()) coverFile = f;
+      }
+
+      // 2. Sin portada local: se baja la primera imagen de la galería.
+      if (coverFile == null) {
+        final String? url = (mod.gallery != null && mod.gallery!.isNotEmpty)
+            ? mod.gallery!.first['image'] as String?
+            : null;
+        if (url == null || url.isEmpty) {
+          if (mounted) {
+            NotificationService.instance.show(
+              context: context,
+              type: NotificationType.error,
+              title: l10n.noCoverToAdjust,
+            );
+          }
+          return null;
+        }
+        setState(() => _isLoading = true);
+        try {
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode != 200) {
+            throw Exception('HTTP ${response.statusCode}');
+          }
+          final String ext = p.extension(Uri.parse(url).path);
+          coverName = '_nexus_cover${ext.isNotEmpty ? ext : '.jpg'}';
+          coverFile = File(p.join(mod.directory.path, coverName));
+          await coverFile.writeAsBytes(response.bodyBytes);
+        } finally {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      }
+
+      if (!mounted) return null;
+
+      // 3. Diálogo de encuadre, empezando por el ajuste que ya tenga.
+      final Alignment current = Alignment(
+        (data['customCoverAlignmentX'] as num?)?.toDouble() ?? 0.0,
+        (data['customCoverAlignmentY'] as num?)?.toDouble() ?? 0.0,
+      );
+      final Alignment? alignment = await EditDialogs.showCoverAlignmentDialog(
+        context,
+        coverFile,
+        initialAlignment: current,
+      );
+      if (alignment == null) return null;
+
+      // 4. Se guarda solo el encuadre (y la ruta si venía de Nexus).
+      data['customCoverPath'] = coverName;
+      data['customCoverAlignmentX'] = alignment.x;
+      data['customCoverAlignmentY'] = alignment.y;
+      await infoFile.writeAsString(JsonEncoder.withIndent('  ').convert(data));
+
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
+      await _loadAllMods(clearHighlight: false);
+      final idx = _allMods.indexWhere((m) => m.directory.path == mod.directory.path);
+      return idx != -1 ? _allMods[idx] : null;
+    } catch (e) {
+      if (mounted) {
+        NotificationService.instance.show(
+          context: context,
+          type: NotificationType.error,
+          title: l10n.errorAdjustingCoverText(e.toString()),
+        );
+      }
+      return null;
+    }
+  }
+
   Future<void> _revertToDefaultCover(ModInfo mod) async {
     final l10n = AppLocalizations.of(context)!;
     if (mod.customCoverPath == null || mod.customCoverPath!.isEmpty) return;
@@ -6759,9 +7233,10 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         otherEditions: _otherEditionsOf(modInfo),
         thumbnailService: _thumbnailService,
         onUpdateDetails: _updateModDetails,
-        onShowInExplorer: _showInExplorer,
+        onShowInExplorer: _showModInExplorer,
         onShowImageGallery: _showImageGalleryDialog,
         onShowGeneralEditDialog: EditDialogs.showGeneralEditDialog,
+        onAdjustCover: _adjustCover,
         onPanelClosed: onPanelClosed,
 
         // ++ INICIO DE LA MODIFICACIÓN ++
@@ -7062,6 +7537,9 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       }
 
       if (newData.containsKey('replacesOutfits') || newData.containsKey('replacesOutfit')) {
+        // Edición manual: los trajes dejan de ser "auto-detectados" y el
+        // reanálisis automático ya no los toca.
+        data.remove(ModMetadataMigrator.outfitsAutoDetectedKey);
         List<String>? outList;
         if (newData.containsKey('replacesOutfits')) {
           outList = newData['replacesOutfits'] as List<String>?;
@@ -7227,6 +7705,96 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   }
 
   /// Extracts mod identifiers to a JSON file on the user's desktop.
+  /// OPCIÓN DE DESARROLLADOR: prueba la auto-instalación de la propia app con
+  /// un .zip local (el mismo que se distribuye en Nexus). Extrae, valida y, en
+  /// una build de release, reemplaza los archivos de la app y la reinicia.
+  Future<void> _testSelfUpdate() async {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (!SelfUpdateService.isSupported) {
+      NotificationService.instance.show(
+        context: context,
+        type: NotificationType.error,
+        title: l10n.devSelfUpdateUnsupported,
+      );
+      return;
+    }
+
+    final FilePickerResult? picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+      dialogTitle: l10n.devSelfUpdatePickTitle,
+    );
+    final String? zipPath = picked?.files.single.path;
+    if (zipPath == null || !mounted) return;
+
+    if (SelfUpdateService.canApply) {
+      final confirm = await SettingsDialogs.confirm(
+        context: context,
+        title: l10n.devSelfUpdateConfirmTitle,
+        message: l10n.devSelfUpdateConfirmDesc,
+        confirmLabel: l10n.devSelfUpdateInstallAction,
+      );
+      if (!confirm || !mounted) return;
+    }
+
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final state = ValueNotifier<SelfUpdateUiState>(
+      const SelfUpdateUiState(SelfUpdateStage.extracting),
+    );
+    SelfUpdateDialog.show(context, state);
+    // Deja que el diálogo se pinte antes de empezar el trabajo pesado.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+
+    void report(SelfUpdateStage stage, double? fraction) {
+      state.value = SelfUpdateUiState(stage, fraction: fraction);
+    }
+
+    SelfUpdatePlan? plan;
+    try {
+      plan = await SelfUpdateService.prepareFromZip(
+        zipPath,
+        onProgress: report,
+      );
+
+      // Debug/profile: solo se valida el paquete, no se toca la app en ejecución.
+      if (!SelfUpdateService.canApply) {
+        final count = plan.fileCount;
+        await SelfUpdateService.discard(plan);
+        navigator.pop();
+        if (mounted) {
+          NotificationService.instance.show(
+            context: context,
+            type: NotificationType.info,
+            title: l10n.devSelfUpdateDryRunTitle,
+            description: l10n.devSelfUpdateDryRunDesc(count),
+          );
+        }
+        return;
+      }
+
+      await SelfUpdateService.install(plan, onProgress: report);
+
+      report(SelfUpdateStage.restarting, null);
+      await SelfUpdateService.relaunch(plan);
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+    } catch (e) {
+      if (plan != null) await SelfUpdateService.discard(plan);
+      // El diálogo pasa a mostrar el error con un botón Cerrar.
+      state.value = SelfUpdateUiState(
+        SelfUpdateStage.extracting,
+        error: e.toString(),
+      );
+      return;
+    }
+
+    // La versión nueva ya está abierta y esperando a que este proceso termine.
+    try {
+      await windowManager.destroy();
+    } catch (_) {}
+    exit(0);
+  }
+
   Future<void> _extractModIdentifiers() async {
     final l10n = AppLocalizations.of(context)!;
     final confirm = await SettingsDialogs.confirm(
@@ -7325,46 +7893,101 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     }
   }
 
-  Future<void> _processInstallQueue() async {
-  // Si no hay más archivos en la fila, apagamos el procesador
-  if (_installQueue.isEmpty) {
-    setState(() {
-      _isProcessingQueue = false;
-    });
-    return;
-  }
-
-  setState(() {
-    _isProcessingQueue = true;
-  });
-
-  // Tomamos el primer archivo de la fila
-  File fileToProcess = _installQueue.removeAt(0);
-
-  // 1. Abrimos el panel de instalación y ESPERAMOS a que el usuario lo cierre
-  await _showInstallationPanel(initialFiles: [fileToProcess]);
-
-  // 2. Limpieza segura del archivo descargado que acabamos de procesar
-  try {
-    if (await fileToProcess.exists()) {
-      await fileToProcess.delete(); 
-      final parentDir = fileToProcess.parent;
-      if (await parentDir.exists() && await parentDir.list().isEmpty) {
-        await parentDir.delete();
+  /// ¿Queda algo por llegar al panel? (descargas en curso, o ya terminadas
+  /// pero aún sin apilar). Mientras sea así, el panel NO se cierra.
+  bool _hasPendingDownloads() {
+    if (_installQueue.isNotEmpty) return true;
+    for (final t in DownloadManager.instance.activeDownloads) {
+      if (t.status == DownloadStatus.fetching ||
+          t.status == DownloadStatus.downloading) {
+        return true;
+      }
+      if (t.status == DownloadStatus.complete &&
+          t.file != null &&
+          !_enqueuedDownloadPaths.contains(t.file!.path)) {
+        return true;
       }
     }
-  } catch (e) {
-    print("No se pudo limpiar el archivo descargado: $e");
+    return false;
   }
 
-  // 3. Pausa visual breve para que la transición no sea brusca
-  await Future.delayed(const Duration(milliseconds: 500));
+  /// Pasa a la cola del panel los archivos que van llegando, de uno en uno
+  /// (o en tandas) y SIN abrir otro panel: se extraen y se suman a la lista
+  /// "Mods a instalar". Espera si el panel está extrayendo o instalando.
+  Future<void> _drainInstallQueue(
+    StateSetter setPanelState,
+    VoidCallback closePanel,
+  ) async {
+    if (_isDrainingQueue) return;
+    _isDrainingQueue = true;
+    try {
+      while (mounted && _installPanelOpen && _installQueue.isNotEmpty) {
+        if (_isExtracting || _isInstalling) {
+          await Future.delayed(const Duration(milliseconds: 250));
+          continue;
+        }
+        final batch = List<File>.of(_installQueue);
+        _installQueue.clear();
+        // Solo se borrarán después los archivos que DESCARGÓ la app.
+        _consumedDownloads.addAll(
+          batch.where((f) => _enqueuedDownloadPaths.contains(f.path)),
+        );
 
-  // 4. Llamada recursiva para procesar el siguiente mod en la fila
-  if (mounted) {
-    _processInstallQueue();
+        final bool didInstall = await _processArchives(
+          batch,
+          panelStateSetter: setPanelState,
+        );
+        if (!mounted || !_installPanelOpen) break;
+        if (didInstall && _preparedMods.isEmpty && !_hasPendingDownloads()) {
+          closePanel();
+          break;
+        }
+        setPanelState(() {});
+      }
+    } finally {
+      _isDrainingQueue = false;
+    }
   }
-}
+
+  /// Borra los archivos descargados que ya se extrajeron.
+  Future<void> _deleteConsumedDownloads() async {
+    final files = List<File>.of(_consumedDownloads);
+    _consumedDownloads.clear();
+    for (final f in files) {
+      try {
+        if (await f.exists()) {
+          await f.delete();
+          final parentDir = f.parent;
+          if (await parentDir.exists() && await parentDir.list().isEmpty) {
+            await parentDir.delete();
+          }
+        }
+      } catch (e) {
+        print("No se pudo limpiar el archivo descargado: $e");
+      }
+    }
+  }
+
+  /// Se llama cada vez que termina una descarga. UN solo panel para todas:
+  /// si ya hay uno abierto, la descarga se apila ahí; si no, se abre uno.
+  Future<void> _processInstallQueue() async {
+    if (_installPanelOpen) {
+      _drainPanelQueue?.call();
+      return;
+    }
+    if (_isProcessingQueue) return;
+    _isProcessingQueue = true;
+    try {
+      while (mounted && _installQueue.isNotEmpty) {
+        await _showInstallationPanel(fromDownloads: true);
+        await _deleteConsumedDownloads();
+        // Pausa breve para que la transición no sea brusca.
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+    } finally {
+      _isProcessingQueue = false;
+    }
+  }
 
   /// Widget auxiliar para dar padding uniforme a los botones de navegación
   Widget _buildNavButton(String text) {
@@ -7527,22 +8150,37 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
 
   Widget _buildNexusAvatar(double radius, Color accent) {
     final hasAvatar = _nexusAvatarUrl != null && _nexusAvatarUrl!.isNotEmpty;
-    return CircleAvatar(
+
+    // Avatar de letra (sin imagen, o si la imagen no carga): círculo de color.
+    Widget letterAvatar() => CircleAvatar(
       radius: radius,
       backgroundColor: accent,
-      backgroundImage: hasAvatar ? NetworkImage(_nexusAvatarUrl!) : null,
-      child: hasAvatar
-          ? null
-          : Text(
-              (_nexusUserName != null && _nexusUserName!.isNotEmpty)
-                  ? _nexusUserName![0].toUpperCase()
-                  : 'U',
-              style: TextStyle(
-                fontSize: radius * 0.95,
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+      child: Text(
+        (_nexusUserName != null && _nexusUserName!.isNotEmpty)
+            ? _nexusUserName![0].toUpperCase()
+            : 'U',
+        style: TextStyle(
+          fontSize: radius * 0.95,
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+
+    if (!hasAvatar) return letterAvatar();
+
+    // La imagen se recorta en círculo SIN color de fondo, así los PNG con
+    // transparencia se ven tal cual (CircleAvatar pintaba [accent] detrás).
+    return SizedBox(
+      width: radius * 2,
+      height: radius * 2,
+      child: ClipOval(
+        child: Image.network(
+          _nexusAvatarUrl!,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => letterAvatar(),
+        ),
+      ),
     );
   }
 
@@ -7652,10 +8290,23 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
 
   Widget _buildUserProfileMenu() {
     final l10n = AppLocalizations.of(context)!;
-    final Color planColor = _isNexusPremium ? _iosOrange : _iosBlue;
+    final bool isPremium = _nexusPlan.isPremium;
+    final Color planColor = _nexusPlan == NexusPlan.premium
+        ? _iosOrange
+        : (_nexusPlan == NexusPlan.supporter ? _iosGreen : _iosBlue);
+    final IconData planIcon = _nexusPlan == NexusPlan.premium
+        ? Icons.workspace_premium_rounded
+        : (_nexusPlan == NexusPlan.supporter
+            ? Icons.favorite_rounded
+            : Icons.person_rounded);
+    final String planLabel = _nexusPlan == NexusPlan.premium
+        ? l10n.nexusPlanPremium
+        : (_nexusPlan == NexusPlan.supporter
+            ? l10n.nexusPlanSupporter
+            : l10n.nexusPlanMember);
     // Valores de respaldo por si Nexus no informa el límite real en los headers.
-    final int dailyFallback = _isNexusPremium ? 20000 : 2500;
-    final int hourlyFallback = _isNexusPremium ? 500 : 100;
+    final int dailyFallback = isPremium ? 20000 : 2500;
+    final int hourlyFallback = isPremium ? 500 : 100;
 
     return PopupMenuButton<String>(
       tooltip: l10n.nexusProfileTooltip,
@@ -7744,15 +8395,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      _isNexusPremium
-                                          ? Icons.workspace_premium_rounded
-                                          : Icons.person_rounded,
+                                      planIcon,
                                       size: 13,
                                       color: planColor,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      _isNexusPremium ? l10n.nexusPlanPremium : l10n.nexusPlanStandard,
+                                      planLabel,
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,

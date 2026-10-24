@@ -71,6 +71,18 @@ class ModInfo {
     this.editionName,
   });
 
+  /// Tipo para MOSTRAR y FILTRAR. Un mod `logicMod` cuyos .pak/.utoc/.ucas
+  /// viven en ~mods (sin blueprint en LogicMods; solo lo acompañan scripts
+  /// UE4SS) se instala con el tipo interno `logicMod` -para que activar,
+  /// desactivar y borrar muevan todas sus partes-, pero se marca con
+  /// fitMeshType "Generic" y aquí se presenta como genérico.
+  /// No usar para decidir rutas de instalación: para eso sigue siendo
+  /// [modType].
+  String? get displayType =>
+      (modType == 'logicMod' && fitMeshType == 'Generic')
+          ? 'genericPak'
+          : modType;
+
   ModInfo copyWith({
     Directory? directory,
     String? nexusId,

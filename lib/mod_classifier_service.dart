@@ -51,9 +51,15 @@ class ModClassifierService {
     // por la carpeta). Un mod con ModActor / Content/Mods es un blueprint de
     // UE4SS aunque solo traiga los 3 archivos y aunque venga con un .json de
     // configuración (que antes lo hacía pasar por CNS).
+    //   - ModActor                         -> logicMod
+    //   - solo Content/Mods (sin ModActor) -> logicMod (como siempre: aquí no
+    //     hay más contexto; si el archivo trae scripts UE4SS ya lo habrá
+    //     resuelto LogicModStager antes de llegar aquí)
+    //   - reemplaza assets del juego, aunque también lleve Content/Mods
+    //     (híbrido)                        -> sigue como CNS / genérico
     if (hasPakFile) {
       final verdict = await LogicModDetector.classifyPackagesIn(modDir);
-      if (verdict.isLogic) return ModDirectoryType.logicMod;
+      if (verdict.isLogicLike) return ModDirectoryType.logicMod;
     }
 
     // CNS: un .dekcns.json es inequívoco. Un .json cualquiera junto a paks se

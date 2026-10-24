@@ -9,13 +9,17 @@
 //  vacío y la app sigue con la selección manual de siempre.
 //
 // Decisión (ver [resolveAssets]): cada archivo aporta evidencia de un tipo y
-//   3 = archivo que NO es textura (malla, blueprint, física, material...)
-//   2 = textura (carpeta /Textures/ o sufijo tipo _Map01_D, _ORM, _N...)
+//   4 = NÚCLEO del traje: malla, física, anim/blueprint (CH_P_EVE_53.uasset,
+//       ..._PhysicsAsset, carpeta Meshes/, archivos en la raíz del traje)
+//   3 = dependencia: materiales/instancias (MI_*) y otros assets sueltos
+//   2 = textura (carpeta /Textures/, .ubulk, sufijo _Map01_D, _ORM, _RGB...)
 //   1 = solo la carpeta del traje
 // Se descartan los trajes cuya mejor evidencia es MÁS débil que la del mejor
-// traje del mod (p. ej. texturas sueltas de otro traje que arrastra un mod de
-// Skin Suit). Si todo el mod es del mismo nivel (p. ej. un mod de solo
-// texturas), se aceptan todos los trajes detectados, base y variantes.
+// traje del mod. Así, un mod que trae la malla de un traje (Ultimate Bunny) y
+// arrastra materiales + texturas de otro (Planet Diving Suit 7th) solo se
+// asigna al primero: los materiales/texturas son dependencias, no el reemplazo.
+// Si todo el mod es del mismo nivel (p. ej. un mod de solo texturas o de solo
+// materiales), se aceptan todos los trajes detectados, base y variantes.
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -29,6 +33,13 @@ class OutfitAsset {
   final String dir;
   final String file;
   const OutfitAsset(this.dir, this.file);
+
+  /// Extensión con punto, en minúsculas ('' si no tiene).
+  String get ext {
+    final f = file.toLowerCase();
+    final i = f.lastIndexOf('.');
+    return i > 0 ? f.substring(i) : '';
+  }
 
   /// Nombre sin extensión, en minúsculas.
   String get stem {
@@ -50,10 +61,22 @@ class OutfitDetector {
 
   static const int _tierDir = 1;
   static const int _tierTexture = 2;
-  static const int _tierAsset = 3;
+  static const int _tierDependency = 3; // materiales, instancias, otros
+  static const int _tierCore = 4; // malla / física / anim / blueprint
 
   /// Carpetas que indican que el archivo es una textura.
   static const Set<String> _textureDirs = {'textures', 'texture', 'tex'};
+
+  /// Carpetas de materiales: son dependencias, nunca el núcleo del traje.
+  static const Set<String> _dependencyDirs = {
+    'materials', 'material', 'materialinstances', 'mi', 'instances'
+  };
+
+  /// Carpetas que contienen el núcleo del traje (malla, física, anim...).
+  static const Set<String> _coreDirs = {
+    'mesh', 'meshes', 'skeletalmesh', 'skeletalmeshes', 'physics',
+    'animation', 'animations', 'anim', 'blueprint', 'blueprints'
+  };
 
   /// Claves (carpetas + stems) ordenadas de más larga a más corta.
   static final List<String> _keys = () {
@@ -354,26 +377,69 @@ class OutfitDetector {
 
   // ---------------------------------------------------------------- decisión
 
-  /// Partes de un nombre que indican TEXTURA (CH_P_EVE_09_Map01_D, _ORM...).
-  static final RegExp _textureToken = RegExp(
-      r'^(map\d*|tex|texture|mask\d*|orm|orsss?|ssao|sssao|normal|albedo|'
-      r'emissive|[a-z])$');
-  static final RegExp _digits = RegExp(r'^\d+$');
+  /// Partes FUERTES de un nombre: indican TEXTURA aunque el nombre contenga
+  /// también una parte de malla (CH_P_EVE_09_Body_DetailMask, _Hair_Map01...).
+  static final RegExp _strongTextureToken = RegExp(
+      r'^(map\d*|tex|texture|mask\d*|orm|aorm|orsss?|ssao|sssao|normal|albedo|'
+      r'emissive|rgb|rgba|detailmask|diffuse|basecolor)$');
+
+  /// Partes DÉBILES (una letra _D/_N/_E o solo dígitos): solo cuentan como
+  /// textura si el nombre no contiene ninguna parte de malla.
+  static final RegExp _weakTextureToken = RegExp(r'^([a-z]|\d+)$');
   static const Set<String> _meshParts = {
     'body', 'physics', 'animbp', 'anim', 'hair', 'cloth', 'skirt', 'cape',
     'skeleton', 'mesh', 'sk', 'bp'
   };
 
+  /// Prefijos de nombres de malla que no son una parte exacta
+  /// (CH_P_EVE_53_PhysicsAsset, ..._SkeletalMesh, ..._AnimBP_C).
+  static const List<String> _meshPrefixes = [
+    'physics', 'skeletal', 'animbp', 'skeleton'
+  ];
+
+  static bool _isMeshPart(String part) =>
+      _meshParts.contains(part) || _meshPrefixes.any(part.startsWith);
+
   /// ¿El resto del nombre (lo que sigue a la clave del traje) es de textura?
   static bool _isTextureSuffix(String rest) {
     final parts = rest.split('_').where((s) => s.isNotEmpty).toList();
     if (parts.isEmpty) return false;
-    var tex = false;
+    var weak = false;
+    var mesh = false;
     for (final part in parts) {
-      if (_meshParts.contains(part)) return false;
-      if (_textureToken.hasMatch(part) || _digits.hasMatch(part)) tex = true;
+      if (_strongTextureToken.hasMatch(part)) return true;
+      if (_isMeshPart(part)) mesh = true;
+      if (_weakTextureToken.hasMatch(part)) weak = true;
     }
-    return tex;
+    return weak && !mesh;
+  }
+
+  /// ¿Es un material / instancia de material por su nombre? (MI_*, *_Inst)
+  static bool _looksLikeMaterial(String stem) =>
+      stem.startsWith('mi_') ||
+      stem.startsWith('m_') ||
+      stem.endsWith('_inst') ||
+      stem.endsWith('_mat');
+
+  /// ¿El archivo (que NO es textura) es el NÚCLEO del traje (malla, física,
+  /// anim/blueprint) y no una dependencia como un material?
+  ///  - Nunca si está en una carpeta de materiales o se llama MI_* / *_Inst.
+  ///  - Sí si está en una carpeta Meshes/Physics/Anim..., si cuelga directamente
+  ///    de la carpeta del traje (CH_P_EVE_53/CH_P_EVE_53.uasset), si se llama
+  ///    exactamente como el traje, o si su sufijo es de malla (_Body, _PhysicsAsset).
+  static bool _isCore(
+      List<String> segs, String folder, String? key, String stem) {
+    if (segs.any(_dependencyDirs.contains) || _looksLikeMaterial(stem)) {
+      return false;
+    }
+    if (segs.any(_coreDirs.contains)) return true;
+    if (segs.isNotEmpty && segs.last == folder) return true;
+    if (key != null) {
+      final rest = stem.substring(key.length);
+      if (rest.isEmpty) return true;
+      return rest.split('_').any(_isMeshPart);
+    }
+    return false;
   }
 
   /// Clave (carpeta o stem de traje) más larga que prefija a [t].
@@ -403,8 +469,8 @@ class OutfitDetector {
   /// 2. Dentro de la carpeta, el nombre decide base o variante (CH_P_EVE_19 vs
   ///    CH_P_EVE_19_TypeB*). Archivos sin nombre de traje (EVE_COS_28_BB_N)
   ///    cuentan como la base, salvo que ya haya variantes detectadas.
-  /// 3. Cada traje tiene un nivel de evidencia: 3 = no textura, 2 = textura,
-  ///    1 = solo carpeta.
+  /// 3. Cada traje tiene un nivel de evidencia: 4 = núcleo (malla/física/anim),
+  ///    3 = dependencia (materiales...), 2 = textura, 1 = solo carpeta.
   /// 4. Solo se conservan las carpetas cuyo mejor nivel iguala al mejor nivel
   ///    del mod (lo más débil es arrastre de otro traje). Dentro de una carpeta
   ///    conservada se devuelven base y todas las variantes con evidencia.
@@ -429,10 +495,21 @@ class OutfitDetector {
       folder ??= key == null ? null : _keyFolder[key];
       if (folder == null) continue;
 
+      // .ubulk = datos en bloque (texturas): nunca prueban que se reemplace
+      // la malla, aunque el nombre no parezca de textura.
       final bool texture = segs.any(_textureDirs.contains) ||
+          a.ext == '.ubulk' ||
           (key != null && _isTextureSuffix(stem.substring(key.length)));
-      final tier =
-          stem.isEmpty ? _tierDir : (texture ? _tierTexture : _tierAsset);
+      final int tier;
+      if (stem.isEmpty) {
+        tier = _tierDir;
+      } else if (texture) {
+        tier = _tierTexture;
+      } else if (_isCore(segs, folder, key, stem)) {
+        tier = _tierCore;
+      } else {
+        tier = _tierDependency;
+      }
 
       final entries = kOutfitFolders[folder]!;
       final def = entries.firstWhere((e) => e.isDefault);
@@ -481,7 +558,8 @@ class OutfitDetector {
     }
     if (dropped.isNotEmpty) {
       debugPrint('[OutfitDetector] descartados por evidencia más débil '
-          '(texturas/carpeta sueltas): $dropped');
+          '(materiales/texturas/carpeta sueltas): $dropped '
+          '(nivel máximo del mod: $top, por carpeta: $bestTier)');
     }
     return out.toList()..sort();
   }

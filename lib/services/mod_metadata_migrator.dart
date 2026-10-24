@@ -62,16 +62,68 @@ class ModMetadataMigrator {
   /// Versión del análisis de trajes (independiente de [currentSchema], porque
   /// no depende de la red). Súbelo si mejora OutfitDetector y quieres que se
   /// reanalicen los mods que se quedaron sin traje.
-  static const int outfitScanSchema = 1;
+  ///
+  ///   1 -> primera versión.
+  ///   2 -> el detector distingue núcleo (malla/física) de dependencias
+  ///        (materiales/texturas). Se reanalizan los mods sin traje y los que
+  ///        la app asignó automáticamente ([outfitsAutoDetectedKey]), para
+  ///        corregir falsos positivos como "Planet Diving Suit (7th)".
+  static const int outfitScanSchema = 2;
 
-  /// Con menos solicitudes restantes en la hora se pausa la migración; los
-  /// mods pendientes se reintentan en el siguiente arranque.
+  /// Marca en nexus_info.json: los trajes los asignó la detección automática
+  /// (no el usuario). Solo esos mods se reanalizan al subir [outfitScanSchema];
+  /// una selección manual nunca se toca.
+  static const String outfitsAutoDetectedKey = 'outfitsAutoDetected';
+
+  /// Con menos solicitudes restantes en la hora se pausa la migración.
   static const int _minHourlyRemaining = 5;
+
+  /// false = un mod cuya actualización de metadatos de Nexus se intentó y no
+  /// llegó a completarse (error, mod retirado, límite de la API...) NO se
+  /// vuelve a intentar en los siguientes arranques: se anota
+  /// [migrationGivenUpKey] en su nexus_info.json. Ponlo en true para volver al
+  /// comportamiento anterior (reintentar los pendientes en cada arranque).
+  static const bool retryPendingMetadata = false;
+  static const String migrationGivenUpKey = 'metadataMigrationGivenUp';
+
+  /// true solo durante el botón "Actualizar metadatos" de Ajustes: además de
+  /// rellenar lo que falta, se refrescan resumen, autor y descripción de Nexus
+  /// (los textos personalizados por el usuario viven en otros campos y no se
+  /// tocan).
+  static bool forceRefresh = false;
+
+  /// Quita de [data] las marcas que impiden reintentar la actualización
+  /// ("no reintentar", versión de la app ya migrada, galería ya intentada y, solo
+  /// en mods con trajes asignados automáticamente, el análisis de trajes).
+  /// Un traje elegido por el usuario nunca se reanaliza. Devuelve true si
+  /// cambió algo.
+  static bool resetForRefresh(Map<String, dynamic> data) {
+    var changed = false;
+    for (final key in const [
+      'managerVersion',
+      migrationGivenUpKey,
+      'metadataMigrationGivenUpAt',
+      'galleryAttemptAt',
+    ]) {
+      if (data.remove(key) != null) changed = true;
+    }
+    if (data[outfitsAutoDetectedKey] == true &&
+        data.remove('outfitScanSchema') != null) {
+      changed = true;
+    }
+    return changed;
+  }
+
+  /// Olvida los mods que fallaron en esta sesión (para poder reintentarlos).
+  static void clearSessionFailures() => _failedThisSession.clear();
 
   /// ¿Este nexus_info.json necesita migrarse?
   static bool needsMigration(Map<String, dynamic> data, String appVersion) {
     final nexusId = data['nexusId']?.toString();
     if (nexusId == null || nexusId.isEmpty) return false;
+    if (!retryPendingMetadata && data[migrationGivenUpKey] == true) {
+      return false;
+    }
 
     final managerVersion = data['managerVersion'] as String?;
     if (managerVersion == null) return true;
@@ -98,6 +150,15 @@ class ModMetadataMigrator {
     final scanned = data['outfitScanSchema'];
     if (scanned is int && scanned >= outfitScanSchema) return false;
 
+    // Trajes asignados por la propia detección con una versión anterior del
+    // análisis: se reevalúan (el detector ha mejorado).
+    final current0 = data['replacesOutfits'];
+    if (data[outfitsAutoDetectedKey] == true &&
+        current0 is List &&
+        current0.isNotEmpty) {
+      return true;
+    }
+
     // Ya tiene trajes (formato actual o el antiguo de un solo traje): se respeta.
     final current = data['replacesOutfits'];
     if (current is List && current.isNotEmpty) return false;
@@ -120,7 +181,8 @@ class ModMetadataMigrator {
   ///
   /// Devuelve true si la parte de Nexus se completó. Devuelve false si no hacía
   /// falta, falta la API key, no hay red, el mod ya no existe en Nexus o se
-  /// agotó el límite horario: en ese caso se reintentará en el próximo inicio.
+  /// agotó el límite horario. Con [retryPendingMetadata] en false, un intento
+  /// que falló no se repite en arranques posteriores.
   /// Los trajes detectados en el paso 1 se guardan (y se reflejan en [data])
   /// aunque devuelva false.
   static Future<bool> migrate({
@@ -143,11 +205,39 @@ class ModMetadataMigrator {
     // Un mod que ya falló en esta sesión no se reintenta hasta reiniciar la
     // app (loadMods se ejecuta en cada recarga de la lista).
     if (_failedThisSession.contains(modDirectory.path)) return false;
-    if (_apiBudgetLow()) return false;
+    if (_apiBudgetLow()) {
+      if (!retryPendingMetadata) await _giveUp(modDirectory, data);
+      return false;
+    }
 
     final ok = await _migrate(modDirectory, data, appVersion, apiKey, nexusId);
-    if (!ok) _failedThisSession.add(modDirectory.path);
+    if (!ok) {
+      _failedThisSession.add(modDirectory.path);
+      if (!retryPendingMetadata) await _giveUp(modDirectory, data);
+    }
     return ok;
+  }
+
+  /// Anota en el nexus_info.json que este mod no se reintentará más. Se relee
+  /// el archivo antes de escribir para no pisar otros cambios.
+  static Future<void> _giveUp(
+    Directory modDirectory,
+    Map<String, dynamic> data,
+  ) async {
+    data[migrationGivenUpKey] = true;
+    try {
+      final file = File(p.join(modDirectory.path, 'nexus_info.json'));
+      final latest =
+          Map<String, dynamic>.from(json.decode(await file.readAsString()));
+      latest[migrationGivenUpKey] = true;
+      latest['metadataMigrationGivenUpAt'] = DateTime.now().toIso8601String();
+      await file.writeAsString(JsonEncoder.withIndent('  ').convert(latest));
+      debugPrint('[ModMetadataMigrator] ${p.basename(modDirectory.path)}: '
+          'metadatos pendientes, no se reintentará.');
+    } catch (e) {
+      debugPrint('[ModMetadataMigrator] No se pudo anotar el abandono en '
+          '${modDirectory.path}: $e');
+    }
   }
 
   static final Set<String> _failedThisSession = {};
@@ -179,15 +269,23 @@ class ModMetadataMigrator {
   ) async {
     try {
       final found = await OutfitDetector.detect(modDirectory);
+      final prevRaw = data['replacesOutfits'];
+      final prev = prevRaw is List
+          ? prevRaw.map((e) => e.toString()).toSet()
+          : <String>{};
+      // Solo hay algo nuevo que revisar (conflictos) si aparece un traje que
+      // antes no estaba; un resultado más estrecho no puede crear choques.
+      final gainedOutfit = found.any((o) => !prev.contains(o));
       if (found.isNotEmpty) {
         data['replacesOutfits'] = found;
+        data[outfitsAutoDetectedKey] = true;
         // Igual que al instalar: con trajes asignados es un mod de reemplazo.
         data['modType'] = 'replacement';
       }
       data['outfitScanSchema'] = outfitScanSchema;
       await File(p.join(modDirectory.path, 'nexus_info.json'))
           .writeAsString(JsonEncoder.withIndent('  ').convert(data));
-      if (found.isNotEmpty) {
+      if (found.isNotEmpty && gainedOutfit) {
         _newlyAssignedOutfits.add(p.normalize(modDirectory.path));
       }
       debugPrint('[ModMetadataMigrator] ${p.basename(modDirectory.path)}: '
@@ -211,10 +309,19 @@ class ModMetadataMigrator {
     final modData = await NexusApiService.fetchNexusModData(nexusId, apiKey);
     if (modData == null) return false;
 
-    data['summary'] ??= modData['summary'];
-    data['author'] ??= modData['author'];
+    void fill(String key) {
+      final value = modData[key];
+      if (forceRefresh && value != null) {
+        data[key] = value;
+      } else {
+        data[key] ??= value;
+      }
+    }
+
+    fill('summary');
+    fill('author');
     data['gallery'] ??= modData['gallery'];
-    data['description'] ??= modData['description'];
+    fill('description');
     data['sourceUrl'] ??= 'https://www.nexusmods.com/stellarblade/mods/$nexusId';
 
     final rawModName = (modData['modName'] as String?)?.trim();

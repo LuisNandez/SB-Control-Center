@@ -35,6 +35,20 @@ class AppLocalizationsKo extends AppLocalizations {
   String get settingsAboutDesc => '애플리케이션에 대한 정보';
 
   @override
+  String get settingsRefreshMetadata => '메타데이터 업데이트';
+
+  @override
+  String get settingsRefreshMetadataDesc =>
+      'Nexus Mods에서 모드를 다시 확인하고 부족한 정보와 이미지를 채웁니다';
+
+  @override
+  String get metadataRefreshDone => '메타데이터를 업데이트했습니다';
+
+  @override
+  String get metadataRefreshNoApiKey =>
+      '메타데이터를 업데이트하려면 설정에서 Nexus Mods API 키를 입력하세요.';
+
+  @override
   String get settingsPathsAndTools => '경로 및 도구';
 
   @override
@@ -451,11 +465,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get errorNoJsonInSelection => '선택 항목에 유효한 모드 .json 파일이 없습니다.';
 
   @override
-  String get aboutTitle => 'CNS 제어 센터 정보';
+  String get aboutTitle => 'SB Control Center 정보';
 
   @override
   String get aboutContent =>
-      '이 애플리케이션은 커스텀 나노슈트 시스템(CNS)과 함께 작동하도록 설계된 Stellar Blade용 모드 관리자입니다.\n\n요구 사항: .rar 및 .7z 파일의 모든 기능을 사용하려면 시스템에 7-Zip이 설치되어 있어야 합니다.';
+      'SB Control Center는 Stellar Blade용 모드 관리자입니다. 모드를 한곳에서 설치, 정리, 업데이트할 수 있으며 의상 및 나노슈트 모드를 위한 Custom Nanosuit System(CNS)과 함께 작동합니다.\n\nNexus Mods와 연동하여 다운로드, 업데이트 확인, 사용 중인 모드에 Endorse를 할 수 있습니다.\n\n요구 사항: .rar 및 .7z 파일을 완전히 지원하려면 시스템에 7-Zip이 설치되어 있어야 합니다.';
+
+  @override
+  String get aboutEndorseCta =>
+      '앱이 마음에 드시나요? Nexus Mods에서 Endorse해 주시면 큰 도움이 됩니다.';
+
+  @override
+  String get aboutEndorseThanks => '응원해 주셔서 감사합니다!';
 
   @override
   String get aboutLinkText => '내 제작자 프로필 방문';
@@ -909,6 +930,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get translateDescription => '설명 번역';
 
   @override
+  String get restoreOriginalDescription => '원본 설명 복원';
+
+  @override
   String get dialogTitleUE4SSReinstall => 'UE4SS 재설치';
 
   @override
@@ -1069,6 +1093,52 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get devExtractAction => '추출';
+
+  @override
+  String get devTestSelfUpdateTitle => '자동 설치 테스트';
+
+  @override
+  String get devTestSelfUpdateDesc =>
+      '앱의 .zip 패키지를 선택하여 자동 업데이트와 동일한 방식으로 이 앱 위에 설치합니다.';
+
+  @override
+  String get devSelfUpdateUnsupported => '자동 업데이트는 Windows에서만 사용할 수 있습니다.';
+
+  @override
+  String get devSelfUpdatePickTitle => 'SB Control Center .zip 선택';
+
+  @override
+  String get devSelfUpdateFailed => '업데이트를 설치할 수 없습니다';
+
+  @override
+  String get devSelfUpdateDryRunTitle => '패키지가 유효합니다 (테스트 모드)';
+
+  @override
+  String devSelfUpdateDryRunDesc(int count) {
+    return '파일 $count개를 찾았습니다. 릴리스 빌드가 아니므로 설치되지 않았습니다.';
+  }
+
+  @override
+  String get devSelfUpdateConfirmTitle => '업데이트를 설치하시겠습니까?';
+
+  @override
+  String get devSelfUpdateConfirmDesc =>
+      '앱이 종료되고, 파일을 패키지의 파일로 교체한 뒤 자동으로 다시 실행됩니다.';
+
+  @override
+  String get devSelfUpdateInstallAction => '설치 후 다시 시작';
+
+  @override
+  String get devSelfUpdateProgressTitle => 'SB Control Center 업데이트 중';
+
+  @override
+  String get devSelfUpdateExtracting => '패키지 압축 해제 중…';
+
+  @override
+  String get devSelfUpdateInstalling => '파일 설치 중…';
+
+  @override
+  String get devSelfUpdateRestarting => '다시 시작하는 중…';
 
   @override
   String get devExtractNoData => '추출할 유효한 식별자가 있는 모드를 찾을 수 없습니다.';
@@ -2041,9 +2111,8 @@ class AppLocalizationsKo extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other:
-          '$count mods disabled: they replace outfits already used by other mods',
-      one: '1 mod disabled: it replaces an outfit already used by another mod',
+      other: '모드 $count개를 껐습니다: 다른 모드에서 이미 사용 중인 의상을 교체하기 때문입니다',
+      one: '모드 1개를 껐습니다: 다른 모드에서 이미 사용 중인 의상을 교체하기 때문입니다',
     );
     return '$_temp0';
   }
@@ -2164,7 +2233,10 @@ class AppLocalizationsKo extends AppLocalizations {
   String get nexusPlanPremium => 'Premium';
 
   @override
-  String get nexusPlanStandard => '일반';
+  String get nexusPlanMember => '멤버';
+
+  @override
+  String get nexusPlanSupporter => '서포터';
 
   @override
   String get nexusApiRequestsRemaining => '남은 API 요청';
@@ -2176,7 +2248,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get nexusApiHourly => '시간당';
 
   @override
-  String get downloadFreeAccountLimit => '무료 계정은 Nexus Mods에서 3 MB/s로 제한됩니다';
+  String get downloadMemberAccountLimit =>
+      '멤버 계정은 Nexus Mods에서 1.5 MB/s로 제한됩니다';
+
+  @override
+  String get downloadSupporterAccountLimit =>
+      '서포터 계정은 Nexus Mods에서 3 MB/s로 제한됩니다';
 
   @override
   String get downloadRetryTooltip => '다시 시도';
@@ -2211,4 +2288,31 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get downloadResuming => '다시 시작하는 중...';
+
+  @override
+  String get apiKeyPromptTitle => 'Nexus Mods API 키를 설정하세요';
+
+  @override
+  String get apiKeyPromptMessage =>
+      'API 키가 감지되지 않았습니다. 설정은 선택 사항이지만 편의를 위해 권장합니다. 모드 업데이트 확인, 원클릭 다운로드(nxm://), Nexus Mods의 커버 이미지와 정보 불러오기를 사용할 수 있습니다.';
+
+  @override
+  String get apiKeyPromptConfigure => 'API 키 설정';
+
+  @override
+  String get apiKeyPromptSkip => '건너뛰기';
+
+  @override
+  String get apiKeyPromptDontShowAgain => '이 메시지를 다시 표시하지 않기';
+
+  @override
+  String get adjustCoverTooltip => '커버 조정';
+
+  @override
+  String get noCoverToAdjust => '이 모드에는 조정할 커버가 없습니다';
+
+  @override
+  String errorAdjustingCoverText(Object error) {
+    return '커버 조정 중 오류 발생: $error';
+  }
 }

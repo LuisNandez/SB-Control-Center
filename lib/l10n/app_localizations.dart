@@ -162,6 +162,30 @@ abstract class AppLocalizations {
   /// **'Information about the application'**
   String get settingsAboutDesc;
 
+  /// No description provided for @settingsRefreshMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Update metadata'**
+  String get settingsRefreshMetadata;
+
+  /// No description provided for @settingsRefreshMetadataDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks your mods again on Nexus Mods and completes missing details and images'**
+  String get settingsRefreshMetadataDesc;
+
+  /// No description provided for @metadataRefreshDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata updated'**
+  String get metadataRefreshDone;
+
+  /// No description provided for @metadataRefreshNoApiKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your Nexus Mods API key in Settings to update metadata.'**
+  String get metadataRefreshNoApiKey;
+
   /// No description provided for @settingsPathsAndTools.
   ///
   /// In en, this message translates to:
@@ -861,14 +885,26 @@ abstract class AppLocalizations {
   /// No description provided for @aboutTitle.
   ///
   /// In en, this message translates to:
-  /// **'About CNS Control Center'**
+  /// **'About SB Control Center'**
   String get aboutTitle;
 
   /// No description provided for @aboutContent.
   ///
   /// In en, this message translates to:
-  /// **'This application is a mod manager for Stellar Blade, designed to work with the Custom Nanosuit System (CNS).\n\nRequirement: For full functionality with .rar and .7z files, 7-Zip must be installed on your system.'**
+  /// **'SB Control Center is a mod manager for Stellar Blade. It installs, organizes, and updates your mods in one place, and works with the Custom Nanosuit System (CNS) for outfit and nanosuit mods.\n\nIt connects to Nexus Mods to download, check for updates, and endorse the mods you use.\n\nRequirement: for full support of .rar and .7z archives, 7-Zip must be installed on your system.'**
   String get aboutContent;
+
+  /// No description provided for @aboutEndorseCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Enjoying the app? An Endorse on Nexus Mods helps a lot.'**
+  String get aboutEndorseCta;
+
+  /// No description provided for @aboutEndorseThanks.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you for your support!'**
+  String get aboutEndorseThanks;
 
   /// No description provided for @aboutLinkText.
   ///
@@ -1666,6 +1702,12 @@ abstract class AppLocalizations {
   /// **'Translate description'**
   String get translateDescription;
 
+  /// No description provided for @restoreOriginalDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore original description'**
+  String get restoreOriginalDescription;
+
   /// No description provided for @dialogTitleUE4SSReinstall.
   ///
   /// In en, this message translates to:
@@ -1935,6 +1977,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Extract'**
   String get devExtractAction;
+
+  /// No description provided for @devTestSelfUpdateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Test self-update'**
+  String get devTestSelfUpdateTitle;
+
+  /// No description provided for @devTestSelfUpdateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the app\'s .zip package and install it over this app, as the automatic update will do.'**
+  String get devTestSelfUpdateDesc;
+
+  /// No description provided for @devSelfUpdateUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Self-update is only available on Windows.'**
+  String get devSelfUpdateUnsupported;
+
+  /// No description provided for @devSelfUpdatePickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the SB Control Center .zip'**
+  String get devSelfUpdatePickTitle;
+
+  /// No description provided for @devSelfUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not install the update'**
+  String get devSelfUpdateFailed;
+
+  /// No description provided for @devSelfUpdateDryRunTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Package is valid (test mode)'**
+  String get devSelfUpdateDryRunTitle;
+
+  /// No description provided for @devSelfUpdateDryRunDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files found. It was not installed because this is not a release build.'**
+  String devSelfUpdateDryRunDesc(int count);
+
+  /// No description provided for @devSelfUpdateConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install update?'**
+  String get devSelfUpdateConfirmTitle;
+
+  /// No description provided for @devSelfUpdateConfirmDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The app will close, replace its files with the ones from the package and open again automatically.'**
+  String get devSelfUpdateConfirmDesc;
+
+  /// No description provided for @devSelfUpdateInstallAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Install and restart'**
+  String get devSelfUpdateInstallAction;
+
+  /// No description provided for @devSelfUpdateProgressTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating SB Control Center'**
+  String get devSelfUpdateProgressTitle;
+
+  /// No description provided for @devSelfUpdateExtracting.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting package…'**
+  String get devSelfUpdateExtracting;
+
+  /// No description provided for @devSelfUpdateInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing files…'**
+  String get devSelfUpdateInstalling;
+
+  /// No description provided for @devSelfUpdateRestarting.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarting…'**
+  String get devSelfUpdateRestarting;
 
   /// No description provided for @devExtractNoData.
   ///
@@ -3704,11 +3830,17 @@ abstract class AppLocalizations {
   /// **'Premium'**
   String get nexusPlanPremium;
 
-  /// No description provided for @nexusPlanStandard.
+  /// No description provided for @nexusPlanMember.
   ///
   /// In en, this message translates to:
-  /// **'Standard'**
-  String get nexusPlanStandard;
+  /// **'Member'**
+  String get nexusPlanMember;
+
+  /// No description provided for @nexusPlanSupporter.
+  ///
+  /// In en, this message translates to:
+  /// **'Supporter'**
+  String get nexusPlanSupporter;
 
   /// No description provided for @nexusApiRequestsRemaining.
   ///
@@ -3728,11 +3860,17 @@ abstract class AppLocalizations {
   /// **'Hourly'**
   String get nexusApiHourly;
 
-  /// No description provided for @downloadFreeAccountLimit.
+  /// No description provided for @downloadMemberAccountLimit.
   ///
   /// In en, this message translates to:
-  /// **'Free accounts are limited to 3 MB/s by Nexus Mods'**
-  String get downloadFreeAccountLimit;
+  /// **'Member accounts are limited to 1.5 MB/s by Nexus Mods'**
+  String get downloadMemberAccountLimit;
+
+  /// No description provided for @downloadSupporterAccountLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Supporter accounts are limited to 3 MB/s by Nexus Mods'**
+  String get downloadSupporterAccountLimit;
 
   /// No description provided for @downloadRetryTooltip.
   ///
@@ -3793,6 +3931,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Resuming...'**
   String get downloadResuming;
+
+  /// No description provided for @apiKeyPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up your Nexus Mods API key'**
+  String get apiKeyPromptTitle;
+
+  /// No description provided for @apiKeyPromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No API key was detected. Setting it up is optional, but recommended for convenience: it lets you check for mod updates, download with one click (nxm://) and load covers and info from Nexus Mods.'**
+  String get apiKeyPromptMessage;
+
+  /// No description provided for @apiKeyPromptConfigure.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up API key'**
+  String get apiKeyPromptConfigure;
+
+  /// No description provided for @apiKeyPromptSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get apiKeyPromptSkip;
+
+  /// No description provided for @apiKeyPromptDontShowAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t show this message again'**
+  String get apiKeyPromptDontShowAgain;
+
+  /// No description provided for @adjustCoverTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust cover'**
+  String get adjustCoverTooltip;
+
+  /// No description provided for @noCoverToAdjust.
+  ///
+  /// In en, this message translates to:
+  /// **'This mod has no cover to adjust'**
+  String get noCoverToAdjust;
+
+  /// No description provided for @errorAdjustingCoverText.
+  ///
+  /// In en, this message translates to:
+  /// **'Error adjusting the cover: {error}'**
+  String errorAdjustingCoverText(Object error);
 }
 
 class _AppLocalizationsDelegate

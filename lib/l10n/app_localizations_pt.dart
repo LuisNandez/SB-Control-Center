@@ -35,6 +35,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsAboutDesc => 'Informações sobre o aplicativo';
 
   @override
+  String get settingsRefreshMetadata => 'Atualizar metadados';
+
+  @override
+  String get settingsRefreshMetadataDesc =>
+      'Verifica seus mods novamente no Nexus Mods e completa os dados e imagens que faltam';
+
+  @override
+  String get metadataRefreshDone => 'Metadados atualizados';
+
+  @override
+  String get metadataRefreshNoApiKey =>
+      'Adicione sua chave de API do Nexus Mods nas configurações para atualizar os metadados.';
+
+  @override
   String get settingsPathsAndTools => 'Caminhos e Ferramentas';
 
   @override
@@ -472,11 +486,18 @@ class AppLocalizationsPt extends AppLocalizations {
       'A seleção не contém um arquivo .json de mod válido.';
 
   @override
-  String get aboutTitle => 'Sobre o Centro de Controle CNS';
+  String get aboutTitle => 'Sobre o SB Control Center';
 
   @override
   String get aboutContent =>
-      'Este aplicativo é um gerenciador de mods para o Stellar Blade, projetado para funcionar com o Custom Nanosuit System (CNS).\n\nRequisito: Para funcionalidade completa com arquivos .rar e .7z, o 7-Zip deve estar instalado no seu sistema.';
+      'O SB Control Center é um gerenciador de mods para Stellar Blade. Ele instala, organiza e atualiza seus mods em um só lugar e funciona com o Custom Nanosuit System (CNS) para mods de trajes e nanosuit.\n\nConecta-se ao Nexus Mods para baixar, verificar atualizações e dar Endorse nos mods que você usa.\n\nRequisito: para suporte completo a arquivos .rar e .7z, o 7-Zip deve estar instalado no seu sistema.';
+
+  @override
+  String get aboutEndorseCta =>
+      'Gostando do app? Um Endorse no Nexus Mods ajuda muito.';
+
+  @override
+  String get aboutEndorseThanks => 'Obrigado pelo seu apoio!';
 
   @override
   String get aboutLinkText => 'Visite meu perfil de criador';
@@ -930,6 +951,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get translateDescription => 'Traduzir descrição';
 
   @override
+  String get restoreOriginalDescription => 'Restaurar descrição original';
+
+  @override
   String get dialogTitleUE4SSReinstall => 'Reinstalar UE4SS';
 
   @override
@@ -1093,6 +1117,53 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get devExtractAction => 'Extrair';
+
+  @override
+  String get devTestSelfUpdateTitle => 'Testar autoinstalação';
+
+  @override
+  String get devTestSelfUpdateDesc =>
+      'Selecione o pacote .zip do app e instale-o sobre este app, como a atualização automática fará.';
+
+  @override
+  String get devSelfUpdateUnsupported =>
+      'A autoatualização só está disponível no Windows.';
+
+  @override
+  String get devSelfUpdatePickTitle => 'Selecione o .zip do SB Control Center';
+
+  @override
+  String get devSelfUpdateFailed => 'Não foi possível instalar a atualização';
+
+  @override
+  String get devSelfUpdateDryRunTitle => 'O pacote é válido (modo de teste)';
+
+  @override
+  String devSelfUpdateDryRunDesc(int count) {
+    return '$count arquivos encontrados. Não foi instalado porque esta não é uma build de release.';
+  }
+
+  @override
+  String get devSelfUpdateConfirmTitle => 'Instalar a atualização?';
+
+  @override
+  String get devSelfUpdateConfirmDesc =>
+      'O app será fechado, substituirá seus arquivos pelos do pacote e será aberto novamente de forma automática.';
+
+  @override
+  String get devSelfUpdateInstallAction => 'Instalar e reiniciar';
+
+  @override
+  String get devSelfUpdateProgressTitle => 'Atualizando o SB Control Center';
+
+  @override
+  String get devSelfUpdateExtracting => 'Extraindo o pacote…';
+
+  @override
+  String get devSelfUpdateInstalling => 'Instalando arquivos…';
+
+  @override
+  String get devSelfUpdateRestarting => 'Reiniciando…';
 
   @override
   String get devExtractNoData =>
@@ -2112,8 +2183,9 @@ class AppLocalizationsPt extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          '$count mods disabled: they replace outfits already used by other mods',
-      one: '1 mod disabled: it replaces an outfit already used by another mod',
+          '$count mods desativados: eles substituem trajes que já são usados por outros mods',
+      one:
+          '1 mod desativado: ele substitui um traje que já é usado por outro mod',
     );
     return '$_temp0';
   }
@@ -2236,7 +2308,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nexusPlanPremium => 'Premium';
 
   @override
-  String get nexusPlanStandard => 'Padrão';
+  String get nexusPlanMember => 'Membro';
+
+  @override
+  String get nexusPlanSupporter => 'Apoiador';
 
   @override
   String get nexusApiRequestsRemaining => 'SOLICITAÇÕES DE API RESTANTES';
@@ -2248,8 +2323,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nexusApiHourly => 'Por hora';
 
   @override
-  String get downloadFreeAccountLimit =>
-      'Contas gratuitas são limitadas a 3 MB/s pelo Nexus Mods';
+  String get downloadMemberAccountLimit =>
+      'Contas Membro são limitadas a 1,5 MB/s pelo Nexus Mods';
+
+  @override
+  String get downloadSupporterAccountLimit =>
+      'Contas Apoiador são limitadas a 3 MB/s pelo Nexus Mods';
 
   @override
   String get downloadRetryTooltip => 'Tentar novamente';
@@ -2288,4 +2367,31 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get downloadResuming => 'Retomando...';
+
+  @override
+  String get apiKeyPromptTitle => 'Configure sua chave de API do Nexus Mods';
+
+  @override
+  String get apiKeyPromptMessage =>
+      'Nenhuma chave de API foi detectada. Configurá-la é opcional, mas recomendado por conveniência: ela permite buscar atualizações de mods, baixar com um clique (nxm://) e carregar capas e informações do Nexus Mods.';
+
+  @override
+  String get apiKeyPromptConfigure => 'Configurar chave de API';
+
+  @override
+  String get apiKeyPromptSkip => 'Ignorar';
+
+  @override
+  String get apiKeyPromptDontShowAgain => 'Não mostrar esta mensagem novamente';
+
+  @override
+  String get adjustCoverTooltip => 'Ajustar capa';
+
+  @override
+  String get noCoverToAdjust => 'Este mod não tem uma capa para ajustar';
+
+  @override
+  String errorAdjustingCoverText(Object error) {
+    return 'Erro ao ajustar a capa: $error';
+  }
 }

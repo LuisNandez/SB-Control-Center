@@ -1,15 +1,25 @@
 // lib/services/logic_mod_detector.dart
 //
-// Decide si un contenedor (.utoc / .pak) es de un mod LOGIC (blueprint que
-// carga UE4SS/BPModLoader) o de contenido (reemplazo de assets / genérico),
-// leyendo SOLO su índice de rutas.
+// Decide qué TIPO de contenido lleva un contenedor (.utoc / .pak) leyendo SOLO
+// su índice de rutas:
 //
-// Evidencia de LOGIC (cualquiera basta):
-//   1. Un asset "ModActor.*": es el punto de entrada que busca BPModLoader
-//      (/Game/Mods/<Nombre>/ModActor).
-//   2. Rutas dentro de ".../Content/Mods/..." (/Game/Mods/...): espacio propio
-//      de mods, el juego base no lo usa.
-// Un reemplazo, en cambio, monta sobre ../../../SB/Content/<assets del juego>.
+//   logic     -> hay un asset "ModActor.*": es el punto de entrada que busca
+//                BPModLoader (/Game/Mods/<Nombre>/ModActor). Es la ÚNICA prueba
+//                que justifica meterlo en Paks/LogicMods.
+//   modSpace  -> solo rutas ".../Content/Mods/..." (/Game/Mods/...) y NINGÚN
+//                asset del juego ni ModActor. Son assets propios que alguien
+//                más tiene que cargar (un script Lua de UE4SS, otro mod...).
+//   content   -> reemplaza / añade assets del juego (../SB/Content/Art/...).
+//                Un paquete HÍBRIDO (Content/Mods + assets del juego) también
+//                es content: los reemplazos necesitan ir en ~mods.
+//   unknown   -> no se pudo leer el índice.
+//
+// Antes cualquier ruta "Content/Mods" bastaba para decir "logic", y un mod
+// genérico que mezcla sus blueprints en Content/Mods con reemplazos del juego
+// (p. ej. Nier Dodge FX) acababa en LogicMods. Ahora un ModActor manda, y
+// Content/Mods por sí solo es solo una pista débil (modSpace) que el llamador
+// resuelve con el contexto (¿hay scripts UE4SS?, ¿en qué carpeta lo puso el
+// autor?).
 //
 // Si el índice no se puede leer (cifrado / sin índice) se prueba una búsqueda
 // de texto en el .ucas hermano; si tampoco hay pistas, el resultado es
@@ -22,10 +32,13 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package_index_reader.dart';
 
 enum PackageKind {
-  /// Blueprint de mod (ModActor / Content/Mods).
+  /// Blueprint de mod con ModActor (lo carga BPModLoader).
   logic,
 
-  /// Assets que reemplazan o añaden contenido del juego.
+  /// Solo /Content/Mods sin ModActor y sin tocar assets del juego.
+  modSpace,
+
+  /// Assets que reemplazan o añaden contenido del juego (incluye híbridos).
   content,
 
   /// No se pudo determinar.
@@ -37,7 +50,18 @@ class PackageVerdict {
   final String reason;
   const PackageVerdict(this.kind, this.reason);
 
+  /// ModActor presente: va a LogicMods sin discusión.
   bool get isLogic => kind == PackageKind.logic;
+
+  /// Solo Content/Mods, sin ModActor.
+  bool get isModSpace => kind == PackageKind.modSpace;
+
+  /// Reemplaza o añade assets del juego.
+  bool get isContent => kind == PackageKind.content;
+
+  /// "Parece logic" cuando NO hay más contexto (comportamiento histórico:
+  /// ModActor o Content/Mods). Úsalo solo donde no se sepa si hay UE4SS.
+  bool get isLogicLike => isLogic || isModSpace;
 
   @override
   String toString() => '${kind.name} ($reason)';
@@ -51,11 +75,16 @@ class LogicModDetector {
 
   // ------------------------------------------------------------- por rutas
 
+  static const Set<String> _assetExtensions = {
+    '.uasset', '.umap', '.uexp', '.ubulk', '.uptnl',
+  };
+
   /// Evalúa las rutas internas de un contenedor.
   static PackageVerdict evaluatePaths(Iterable<String> paths,
       {bool structured = true}) {
     var any = false;
-    String? modsFolderHit;
+    String? modsHit;
+    String? gameHit;
     for (final raw in paths) {
       any = true;
       final lower = raw.toLowerCase().replaceAll('\\', '/');
@@ -68,16 +97,42 @@ class LogicModDetector {
       if (isModActor) {
         return PackageVerdict(PackageKind.logic, 'ModActor: $raw');
       }
-      if (modsFolderHit == null &&
-          (lower.contains('/content/mods/') || lower.contains('/game/mods/'))) {
-        modsFolderHit = raw;
+
+      final inModsSpace =
+          lower.contains('/content/mods/') || lower.contains('/game/mods/');
+      if (inModsSpace) {
+        modsHit ??= raw;
+        continue;
+      }
+      if (gameHit == null && _isGameAsset(lower, name, structured)) {
+        gameHit = raw;
       }
     }
-    if (modsFolderHit != null) {
-      return PackageVerdict(PackageKind.logic, 'Content/Mods: $modsFolderHit');
-    }
     if (!any) return const PackageVerdict(PackageKind.unknown, 'empty index');
+
+    if (gameHit != null) {
+      return PackageVerdict(
+        PackageKind.content,
+        modsHit != null
+            ? 'hybrid: replaces game asset $gameHit (+ Content/Mods: $modsHit)'
+            : 'game asset paths: $gameHit',
+      );
+    }
+    if (modsHit != null) {
+      return PackageVerdict(
+          PackageKind.modSpace, 'Content/Mods only, no ModActor: $modsHit');
+    }
     return const PackageVerdict(PackageKind.content, 'game asset paths');
+  }
+
+  /// ¿La ruta es un asset del juego (fuera de Content/Mods)?
+  /// En un índice estructurado basta con que sea un archivo de asset. En un
+  /// escaneo de cadenas los nombres vienen sueltos y fragmentados, así que se
+  /// exige que lleve "/content/" para no confundir un nombre cualquiera.
+  static bool _isGameAsset(String lower, String name, bool structured) {
+    if (!structured) return lower.contains('/content/');
+    final dot = name.lastIndexOf('.');
+    return dot >= 0 && _assetExtensions.contains(name.substring(dot));
   }
 
   // ------------------------------------------------------------ por archivo
@@ -113,9 +168,9 @@ class LogicModDetector {
 
     if (verdict.kind == PackageKind.unknown && ext == '.utoc') {
       final ucas = File(p.setExtension(file.path, '.ucas'));
-      if (await ucas.exists() && await _ucasMentionsMods(ucas)) {
-        verdict = const PackageVerdict(
-            PackageKind.logic, '.ucas references /Game/Mods or ModActor');
+      if (await ucas.exists()) {
+        final hint = await _ucasHint(ucas);
+        if (hint != null) verdict = hint;
       }
     }
 
@@ -128,7 +183,7 @@ class LogicModDetector {
 
   /// Veredicto agregado de todos los contenedores de [dir]. Un .pak que tiene
   /// un .utoc hermano (stub de IoStore) se ignora: manda el .utoc.
-  /// logic si ALGUNO es logic; si no, content si alguno es content.
+  /// Prioridad: logic (ModActor) > content (incluye híbridos) > modSpace.
   static Future<PackageVerdict> classifyPackagesIn(Directory dir,
       {bool recursive = false}) async {
     final files = await _containers(dir, recursive: recursive);
@@ -142,20 +197,23 @@ class LogicModDetector {
         if (p.extension(f.path).toLowerCase() == '.utoc') _stemKey(f),
     };
     var sawContent = false;
-    PackageVerdict last = const PackageVerdict(PackageKind.unknown, 'no containers');
+    PackageVerdict? modSpace;
+    PackageVerdict last =
+        const PackageVerdict(PackageKind.unknown, 'no containers');
     for (final f in list) {
       final ext = p.extension(f.path).toLowerCase();
       if (ext == '.pak' && utocStems.contains(_stemKey(f))) continue;
       if (ext != '.pak' && ext != '.utoc') continue;
       final v = await classifyFile(f);
       if (v.isLogic) return v;
-      if (v.kind == PackageKind.content) sawContent = true;
+      if (v.isContent) sawContent = true;
+      if (v.isModSpace) modSpace ??= v;
       last = v;
     }
     if (sawContent) {
       return const PackageVerdict(PackageKind.content, 'game asset paths');
     }
-    return last;
+    return modSpace ?? last;
   }
 
   static Future<List<File>> _containers(Directory dir,
@@ -177,21 +235,28 @@ class LogicModDetector {
 
   // ---------------------------------------------------------------- .ucas
 
-  static Future<bool> _ucasMentionsMods(File ucas) async {
+  /// Pista de último recurso cuando el índice no se pudo leer: ModActor es
+  /// logic; solo "/Game/Mods/" es modSpace; nada -> null (sin pistas).
+  static Future<PackageVerdict?> _ucasHint(File ucas) async {
     try {
       final raf = await ucas.open();
       try {
         final len = await raf.length();
         final n = math.min(len, _ucasScanBytes);
         final bytes = await raf.read(n);
-        return _containsAscii(bytes, '/Game/Mods/') ||
-            _containsAscii(bytes, 'ModActor');
+        if (_containsAscii(bytes, 'ModActor')) {
+          return const PackageVerdict(
+              PackageKind.logic, '.ucas references ModActor');
+        }
+        if (_containsAscii(bytes, '/Game/Mods/')) {
+          return const PackageVerdict(
+              PackageKind.modSpace, '.ucas references /Game/Mods');
+        }
       } finally {
         await raf.close();
       }
-    } catch (_) {
-      return false;
-    }
+    } catch (_) {}
+    return null;
   }
 
   static bool _containsAscii(Uint8List hay, String needle) {

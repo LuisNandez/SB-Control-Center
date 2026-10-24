@@ -8,6 +8,7 @@ import 'ui/theme/ios_theme.dart';
 import 'ui/widgets/ios_widgets.dart';
 import 'ui/widgets/ios_settings_widgets.dart';
 import 'ui/dialogs/settings_dialogs.dart';
+import 'ui/widgets/self_endorse_section.dart';
 
 class SettingsPage extends StatefulWidget {
   final String? initialGameRootPath;
@@ -22,6 +23,7 @@ class SettingsPage extends StatefulWidget {
   final Future<bool> Function() onUninstallCNS;
   final VoidCallback onDeleteAllNexusInfo;
   final VoidCallback onExtractModIds;
+  final VoidCallback onTestSelfUpdate;
   final bool isDeveloperModeEnabled;
 
   final Future<String?> Function() onSelectGamePath;
@@ -30,6 +32,7 @@ class SettingsPage extends StatefulWidget {
   final Future<void> Function() onManageSkippedVersions;
   final VoidCallback onShowLanguageDialog;
   final VoidCallback onShowAboutDialog;
+  final Future<void> Function() onRefreshMetadata;
   final VoidCallback onRunSelfHealing;
   final Future<void> Function() onRepairGameStartup;
   final bool initialShowModTypeTags;
@@ -38,6 +41,10 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onAutoAssignOutfitsChanged;
   final VoidCallback onRunConflictPatcher;
   final VoidCallback onRevertConflictPatches;
+
+  /// Si es true, la página abre directamente "Conectividad y actualizaciones" y
+  /// muestra el diálogo de la API key (lo usa el aviso inicial de la app).
+  final bool startOnApiKey;
 
   const SettingsPage({
     super.key,
@@ -51,6 +58,7 @@ class SettingsPage extends StatefulWidget {
     required this.onUninstallCNS,
     required this.onDeleteAllNexusInfo,
     required this.onExtractModIds,
+    required this.onTestSelfUpdate,
     required this.isDeveloperModeEnabled,
     required this.onSelectGamePath,
     required this.onSelect7zipPath,
@@ -58,6 +66,7 @@ class SettingsPage extends StatefulWidget {
     required this.onManageSkippedVersions,
     required this.onShowLanguageDialog,
     required this.onShowAboutDialog,
+    required this.onRefreshMetadata,
     required this.onRunSelfHealing,
     required this.onRepairGameStartup,
     required this.initialShowModTypeTags,
@@ -66,6 +75,7 @@ class SettingsPage extends StatefulWidget {
     required this.onAutoAssignOutfitsChanged,
     required this.onRunConflictPatcher,
     required this.onRevertConflictPatches,
+    this.startOnApiKey = false,
   });
 
   @override
@@ -85,6 +95,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool _autoAssignOutfits;
 
   _Pane _selected = _Pane.general;
+  bool _refreshingMetadata = false;
 
   @override
   void initState() {
@@ -96,6 +107,21 @@ class _SettingsPageState extends State<SettingsPage> {
     isCnsCoreInstalled = widget.isCnsCoreInstalled;
     _showModTypeTags = widget.initialShowModTypeTags;
     _autoAssignOutfits = widget.initialAutoAssignOutfits;
+    if (widget.startOnApiKey) {
+      _selected = _Pane.connectivity;
+      // Tras el primer frame (con la página ya construida) se abre el diálogo.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _editApiKey();
+      });
+    }
+  }
+
+  /// Abre el diálogo de la API key y refleja el resultado en la página.
+  Future<void> _editApiKey() async {
+    final newKey = await widget.onShowApiKeyDialog();
+    if (newKey != null && mounted) {
+      setState(() => apiKey = newKey);
+    }
   }
 
   /// Icono blanco para dentro de una insignia de color.
@@ -362,6 +388,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+      // Endorse de la propia app (solo aparece si la cuenta aún no la endorsó)
+      const Padding(
+        padding: EdgeInsets.only(top: 4),
+        child: SelfEndorseSection(),
+      ),
     ];
   }
 
@@ -540,12 +571,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 isApiKeySet ? l10n.settingsApiKeySet : l10n.settingsApiKeyNotSet,
             subtitleColor: isApiKeySet ? IosColors.green : IosColors.orange,
             showChevron: true,
-            onTap: () async {
-              final newKey = await widget.onShowApiKeyDialog();
-              if (newKey != null) {
-                setState(() => apiKey = newKey);
-              }
-            },
+            onTap: _editApiKey,
           ),
           IosSettingsTile(
             leading: IosIconBadge(
@@ -561,6 +587,32 @@ class _SettingsPageState extends State<SettingsPage> {
               await widget.onManageSkippedVersions();
               if (mounted) setState(() {});
             },
+          ),
+          IosSettingsTile(
+            leading: IosIconBadge(
+              color: IosColors.green,
+              child: _badgeIcon(HugeIcons.strokeRoundedRefresh01),
+            ),
+            title: l10n.settingsRefreshMetadata,
+            subtitle: l10n.settingsRefreshMetadataDesc,
+            trailing: _refreshingMetadata
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+            showChevron: !_refreshingMetadata,
+            onTap: _refreshingMetadata
+                ? null
+                : () async {
+                    setState(() => _refreshingMetadata = true);
+                    try {
+                      await widget.onRefreshMetadata();
+                    } finally {
+                      if (mounted) setState(() => _refreshingMetadata = false);
+                    }
+                  },
           ),
         ],
       ),
@@ -600,6 +652,20 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: l10n.devExtractIdsDesc,
             showChevron: true,
             onTap: widget.onExtractModIds,
+          ),
+          IosSettingsTile(
+            leading: const IosIconBadge(
+              color: IosColors.green,
+              child: Icon(
+                Icons.system_update_alt_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+            title: l10n.devTestSelfUpdateTitle,
+            subtitle: l10n.devTestSelfUpdateDesc,
+            showChevron: true,
+            onTap: widget.onTestSelfUpdate,
           ),
         ],
       ),
