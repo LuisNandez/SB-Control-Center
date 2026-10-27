@@ -494,7 +494,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get aboutContent =>
-      'SB Control Center est un gestionnaire de mods pour Stellar Blade. Il installe, organise et met à jour vos mods au même endroit, et fonctionne avec le Custom Nanosuit System (CNS) pour les mods de tenues et de nanosuit.\n\nIl se connecte à Nexus Mods pour télécharger, vérifier les mises à jour et donner un Endorse aux mods que vous utilisez.\n\nPrérequis : pour une prise en charge complète des archives .rar et .7z, 7-Zip doit être installé sur votre système.';
+      'SB Control Center est un gestionnaire de mods pour Stellar Blade. Il installe, organise et met à jour vos mods au même endroit, et fonctionne avec le Custom Nanosuit System (CNS) pour les mods de tenues et de nanosuit.\n\nIl se connecte à Nexus Mods pour télécharger, vérifier les mises à jour et donner un Endorse aux mods que vous utilisez.\n\nInclut 7-Zip (7-zip.org) pour extraire les archives .zip, .rar et .7z.';
 
   @override
   String get aboutEndorseCta =>

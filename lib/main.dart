@@ -1015,15 +1015,28 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     });
   }
 
-  Future<void> _find7zipPath() async {
-    final prefs = await SharedPreferences.getInstance();
-    String? saved7zipPath = prefs.getString(AppPrefs.sevenZipPath);
+  /// Ruta de 7z.exe incluido junto a la app: <carpeta del .exe>\tools\7zip\7z.exe
+  static String get _bundledSevenZipPath => p.join(
+      p.dirname(Platform.resolvedExecutable), 'tools', '7zip', '7z.exe');
 
-    if (saved7zipPath != null && await File(saved7zipPath).exists()) {
-      setState(() => _7zipPath = saved7zipPath);
+  Future<void> _find7zipPath() async {
+    // La ruta manual de 7-Zip ya no existe en Ajustes: se limpia el valor
+    // guardado por versiones anteriores para que no interfiera.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(AppPrefs.sevenZipPath)) {
+        await prefs.remove(AppPrefs.sevenZipPath);
+      }
+    } catch (_) {}
+
+    // 1) 7-Zip incluido con la app (tools\7zip\7z.exe + 7z.dll).
+    final bundled = _bundledSevenZipPath;
+    if (await File(bundled).exists()) {
+      setState(() => _7zipPath = bundled);
       return;
     }
 
+    // 2) Respaldo: 7-Zip instalado en el sistema (solo si falta el incluido).
     const List<String> possiblePaths = [
       r'C:\Program Files\7-Zip\7z.exe',
       r'C:\Program Files (x86)\7-Zip\7z.exe',
@@ -1034,46 +1047,6 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         return;
       }
     }
-  }
-
-  Future<String?> _select7zipPathManually() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['exe'],
-        dialogTitle: AppLocalizations.of(context)!.dialogTitleSelect7zip,
-      );
-      if (result != null && result.files.single.path != null) {
-        final newPath = result.files.single.path!;
-        if (p.basename(newPath).toLowerCase() != '7z.exe') {
-          if (mounted) {
-            NotificationService.instance.show(
-              context: context,
-              type: NotificationType.error,
-              title: AppLocalizations.of(context)!.snackBar7zipPathInvalid,
-            );
-          }
-          return null;
-        }
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(AppPrefs.sevenZipPath, newPath);
-        setState(() {
-          _7zipPath = newPath;
-        });
-        if (mounted) {
-          NotificationService.instance.show(
-            context: context,
-            type: NotificationType.success,
-            title: AppLocalizations.of(context)!.snackBar7zipPathSaved,
-          );
-        }
-        return newPath;
-      }
-    } catch (e) {
-      setState(() => _statusMessage = AppLocalizations.of(context)!.errorSelecting7Zip(e.toString()));
-    }
-    return null;
   }
 
   Future<void> _findGamePath() async {
@@ -5256,7 +5229,6 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       MaterialPageRoute(
         builder: (context) => SettingsPage(
           initialGameRootPath: _gameRootPath,
-          initialSevenZipPath: _7zipPath,
           initialApiKey: _apiKey,
           skippedVersions: _skippedVersions,
           // Pasar los nuevos estados y funciones a la página de configuración
@@ -5268,7 +5240,6 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
               _uninstallCoreComponent(isUe4ss: false),
           // Resto de callbacks
           onSelectGamePath: _selectGamePathManually,
-          onSelect7zipPath: _select7zipPathManually,
           onShowApiKeyDialog: _showApiKeyDialog,
           onManageSkippedVersions: _manageSkippedVersions,
           onShowLanguageDialog: _showLanguageDialog,

@@ -472,7 +472,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get aboutContent =>
-      'SB Control CenterはStellar Blade用のMODマネージャーです。MODのインストール、整理、更新を1か所で行え、衣装やナノスーツ系MOD向けのカスタムナノスーツシステム（CNS）にも対応しています。\n\nNexus Modsと連携して、ダウンロード、更新の確認、使用中のMODへのEndorseができます。\n\n要件：.rarおよび.7zファイルを完全にサポートするには、システムに7-Zipがインストールされている必要があります。';
+      'SB Control CenterはStellar Blade用のMODマネージャーです。MODのインストール、整理、更新を1か所で行え、衣装やナノスーツ系MOD向けのカスタムナノスーツシステム（CNS）にも対応しています。\n\nNexus Modsと連携して、ダウンロード、更新の確認、使用中のMODへのEndorseができます。\n\n.zip、.rar、.7zファイルの展開には、同梱の7-Zip（7-zip.org）を使用しています。';
 
   @override
   String get aboutEndorseCta =>

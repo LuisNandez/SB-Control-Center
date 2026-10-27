@@ -229,12 +229,18 @@ class _ModThumbnailImageState extends State<ModThumbnailImage> {
     if (file != null) {
       // Sin existsSync(): comprobar el disco en cada build bloquea la UI al
       // hacer scroll. Si el archivo no existe, errorBuilder pinta el icono.
+      //
+      // Las miniaturas generadas ya son pequeñas y se decodifican tal cual.
+      // Si falló la reducción y llega el ORIGINAL (puede ser un 4K de ~33 MB
+      // decodificado), se limita el ancho de decodificación para proteger la RAM.
       return Image.file(
         file,
         width: widget.width,
         height: widget.height,
         fit: widget.fit,
         alignment: widget.alignment,
+        cacheWidth:
+            widget.thumbnailService.isGeneratedThumbnail(file) ? null : 800,
         gaplessPlayback: true,
         frameBuilder: ModImage._fadeIn,
         errorBuilder: (context, error, stackTrace) => _fallback(),

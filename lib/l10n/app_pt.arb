@@ -129,7 +129,7 @@
     "errorNoCompatibleFilesInArchive": "O arquivo compactado não contém arquivos de mod compatíveis.",
     "errorNoJsonInSelection": "A seleção не contém um arquivo .json de mod válido.",
     "aboutTitle": "Sobre o SB Control Center",
-    "aboutContent": "O SB Control Center é um gerenciador de mods para Stellar Blade. Ele instala, organiza e atualiza seus mods em um só lugar e funciona com o Custom Nanosuit System (CNS) para mods de trajes e nanosuit.\n\nConecta-se ao Nexus Mods para baixar, verificar atualizações e dar Endorse nos mods que você usa.\n\nRequisito: para suporte completo a arquivos .rar e .7z, o 7-Zip deve estar instalado no seu sistema.",
+    "aboutContent": "O SB Control Center é um gerenciador de mods para Stellar Blade. Ele instala, organiza e atualiza seus mods em um só lugar e funciona com o Custom Nanosuit System (CNS) para mods de trajes e nanosuit.\n\nConecta-se ao Nexus Mods para baixar, verificar atualizações e dar Endorse nos mods que você usa.\n\nInclui o 7-Zip (7-zip.org) para extrair arquivos .zip, .rar e .7z.",
     "aboutEndorseCta": "Gostando do app? Um Endorse no Nexus Mods ajuda muito.",
     "aboutEndorseThanks": "Obrigado pelo seu apoio!",
     "aboutLinkText": "Visite meu perfil de criador",

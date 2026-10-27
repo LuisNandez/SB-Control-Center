@@ -469,7 +469,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get aboutContent =>
-      'SB Control Center는 Stellar Blade용 모드 관리자입니다. 모드를 한곳에서 설치, 정리, 업데이트할 수 있으며 의상 및 나노슈트 모드를 위한 Custom Nanosuit System(CNS)과 함께 작동합니다.\n\nNexus Mods와 연동하여 다운로드, 업데이트 확인, 사용 중인 모드에 Endorse를 할 수 있습니다.\n\n요구 사항: .rar 및 .7z 파일을 완전히 지원하려면 시스템에 7-Zip이 설치되어 있어야 합니다.';
+      'SB Control Center는 Stellar Blade용 모드 관리자입니다. 모드를 한곳에서 설치, 정리, 업데이트할 수 있으며 의상 및 나노슈트 모드를 위한 Custom Nanosuit System(CNS)과 함께 작동합니다.\n\nNexus Mods와 연동하여 다운로드, 업데이트 확인, 사용 중인 모드에 Endorse를 할 수 있습니다.\n\n.zip, .rar, .7z 파일 압축 해제에는 포함된 7-Zip(7-zip.org)을 사용합니다.';
 
   @override
   String get aboutEndorseCta =>

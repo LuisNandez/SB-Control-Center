@@ -12,7 +12,6 @@ import 'ui/widgets/self_endorse_section.dart';
 
 class SettingsPage extends StatefulWidget {
   final String? initialGameRootPath;
-  final String? initialSevenZipPath;
   final String? initialApiKey;
   final Map<String, String> skippedVersions;
 
@@ -27,7 +26,6 @@ class SettingsPage extends StatefulWidget {
   final bool isDeveloperModeEnabled;
 
   final Future<String?> Function() onSelectGamePath;
-  final Future<String?> Function() onSelect7zipPath;
   final Future<String?> Function() onShowApiKeyDialog;
   final Future<void> Function() onManageSkippedVersions;
   final VoidCallback onShowLanguageDialog;
@@ -49,7 +47,6 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.initialGameRootPath,
-    required this.initialSevenZipPath,
     required this.initialApiKey,
     required this.skippedVersions,
     required this.isUe4ssInstalled,
@@ -61,7 +58,6 @@ class SettingsPage extends StatefulWidget {
     required this.onTestSelfUpdate,
     required this.isDeveloperModeEnabled,
     required this.onSelectGamePath,
-    required this.onSelect7zipPath,
     required this.onShowApiKeyDialog,
     required this.onManageSkippedVersions,
     required this.onShowLanguageDialog,
@@ -86,7 +82,6 @@ enum _Pane { general, paths, core, connectivity, developer }
 
 class _SettingsPageState extends State<SettingsPage> {
   late String? gameRootPath;
-  late String? sevenZipPath;
   late String? apiKey;
 
   late bool isUe4ssInstalled;
@@ -101,7 +96,6 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     gameRootPath = widget.initialGameRootPath;
-    sevenZipPath = widget.initialSevenZipPath;
     apiKey = widget.initialApiKey;
     isUe4ssInstalled = widget.isUe4ssInstalled;
     isCnsCoreInstalled = widget.isCnsCoreInstalled;
@@ -416,21 +410,6 @@ class _SettingsPageState extends State<SettingsPage> {
               final newPath = await widget.onSelectGamePath();
               if (newPath != null) {
                 setState(() => gameRootPath = newPath);
-              }
-            },
-          ),
-          IosSettingsTile(
-            leading: IosIconBadge(
-              color: IosColors.gray,
-              child: _badgeIcon(HugeIcons.strokeRoundedFolderZip),
-            ),
-            title: l10n.settings7zipPath,
-            subtitle: sevenZipPath ?? l10n.settings7zipPathAuto,
-            showChevron: true,
-            onTap: () async {
-              final newPath = await widget.onSelect7zipPath();
-              if (newPath != null) {
-                setState(() => sevenZipPath = newPath);
               }
             },
           ),

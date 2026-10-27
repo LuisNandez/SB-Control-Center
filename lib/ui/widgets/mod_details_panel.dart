@@ -135,6 +135,15 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   Animation<double>? _routeAnimation;
   Timer? _readyFallback;
 
+  // ---- Cristal que se activa al final ---------------------------------------
+  // El desenfoque (blur 40) sobre casi toda la pantalla es lo más caro de
+  // pintar: repetirlo en cada fotograma mientras la hoja sube y se monta el
+  // contenido es lo que hacía lenta la apertura. Por eso la hoja sube con un
+  // fondo casi opaco y SIN desenfoque, y el cristal se activa (con un fundido
+  // de color) cuando ya terminó la animación y la cascada de secciones.
+  final ValueNotifier<bool> _glassSettled = ValueNotifier<bool>(false);
+  Timer? _glassTimer;
+
   @override
   void initState() {
     super.initState();
@@ -181,6 +190,10 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     setState(() => _contentReady = true);
     _updateTranslationButtonVisibility();
     _loadEndorseStatus();
+    // La cascada de secciones dura ~0,8 s: el cristal entra después.
+    _glassTimer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) _glassSettled.value = true;
+    });
   }
 
   /// Miniatura de la portada que la lista ya tiene en memoria. Se muestra al
@@ -207,6 +220,8 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   void dispose() {
     _routeAnimation?.removeStatusListener(_onRouteStatus);
     _readyFallback?.cancel();
+    _glassTimer?.cancel();
+    _glassSettled.dispose();
     widget.onPanelClosed(_needsReloadOnClose ? currentModInfo : null);
     _wheelSmoother.cancel();
     _carouselScrollController.dispose();
@@ -2057,19 +2072,32 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
         // por su fondo oscuro: se pausa el desenfoque (repetirlo en cada
         // fotograma estorbaba a la animación y al zoom). Al cerrar el visor
         // vuelve solo. El contenido (`child`) no se reconstruye.
-        return ValueListenableBuilder<bool>(
-          valueListenable: imageViewerActive,
-          builder: (context, viewerOpen, child) => IosGlass(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            // Fondo de cristal original: desenfoque de 40 px y color
-            // translúcido (86 %). Nota: el desenfoque es lo más caro de
-            // pintar; si el scroll se resiente en algún equipo, pon blur: 0 y
-            // color: 0xF21C1C1E.
-            blur: 40,
-            blurEnabled: !viewerOpen,
-            color: const Color(0xDB1C1C1E),
-            child: child!,
-          ),
+        return AnimatedBuilder(
+          animation: Listenable.merge([imageViewerActive, _glassSettled]),
+          builder: (context, child) {
+            final bool settled = _glassSettled.value;
+            // Fondo de cristal: desenfoque de 40 px y color translúcido (86 %).
+            // Mientras la hoja se abre va casi opaco (95 %) y sin desenfoque;
+            // al asentarse el color se aclara con un fundido y entra el blur.
+            return TweenAnimationBuilder<Color?>(
+              tween: ColorTween(
+                end: settled
+                    ? const Color(0xDB1C1C1E)
+                    : const Color(0xF21C1C1E),
+              ),
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOut,
+              child: child,
+              builder: (context, color, inner) => IosGlass(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+                blur: 40,
+                blurEnabled: settled && !imageViewerActive.value,
+                color: color ?? const Color(0xDB1C1C1E),
+                child: inner!,
+              ),
+            );
+          },
           child: Material(
             type: MaterialType.transparency,
             child: Column(

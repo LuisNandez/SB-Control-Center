@@ -75,6 +75,16 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
+# 7-Zip incluido con la app -> Release/tools/7zip
+set(SEVENZIP_SRC "${CMAKE_CURRENT_SOURCE_DIR}/third_party/7zip")
+if(EXISTS "${SEVENZIP_SRC}/7z.exe" AND EXISTS "${SEVENZIP_SRC}/7z.dll")
+  install(DIRECTORY "${SEVENZIP_SRC}/"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/tools/7zip"
+    COMPONENT Runtime)
+else()
+  message(WARNING "No se encontró 7z.exe/7z.dll en ${SEVENZIP_SRC}")
+endif()
+
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 

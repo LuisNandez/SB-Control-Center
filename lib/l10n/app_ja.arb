@@ -129,7 +129,7 @@
     "errorNoCompatibleFilesInArchive": "圧縮ファイルには互換性のあるMODファイルが含まれていません。",
     "errorNoJsonInSelection": "選択範囲に有効なMODの.jsonファイルが含まれていません。",
     "aboutTitle": "SB Control Centerについて",
-    "aboutContent": "SB Control CenterはStellar Blade用のMODマネージャーです。MODのインストール、整理、更新を1か所で行え、衣装やナノスーツ系MOD向けのカスタムナノスーツシステム（CNS）にも対応しています。\n\nNexus Modsと連携して、ダウンロード、更新の確認、使用中のMODへのEndorseができます。\n\n要件：.rarおよび.7zファイルを完全にサポートするには、システムに7-Zipがインストールされている必要があります。",
+    "aboutContent": "SB Control CenterはStellar Blade用のMODマネージャーです。MODのインストール、整理、更新を1か所で行え、衣装やナノスーツ系MOD向けのカスタムナノスーツシステム（CNS）にも対応しています。\n\nNexus Modsと連携して、ダウンロード、更新の確認、使用中のMODへのEndorseができます。\n\n.zip、.rar、.7zファイルの展開には、同梱の7-Zip（7-zip.org）を使用しています。",
     "aboutEndorseCta": "このアプリを気に入っていただけましたか？Nexus ModsでのEndorseが大きな助けになります。",
     "aboutEndorseThanks": "応援ありがとうございます！",
     "aboutLinkText": "クリエイタープロフィールを見る",

@@ -129,7 +129,7 @@
     "errorNoCompatibleFilesInArchive": "压缩文件不包含兼容的模组文件。",
     "errorNoJsonInSelection": "所选内容不包含有效的模组 .json 文件。",
     "aboutTitle": "关于 SB Control Center",
-    "aboutContent": "SB Control Center 是《Stellar Blade》的模组管理器。它可以在一处安装、整理和更新你的模组，并支持用于服装和纳米战衣模组的 Custom Nanosuit System (CNS)。\n\n它会连接 Nexus Mods，用于下载、检查更新，以及为你使用的模组点 Endorse。\n\n要求：要完整支持 .rar 和 .7z 压缩包，系统中需要安装 7-Zip。",
+    "aboutContent": "SB Control Center 是《Stellar Blade》的模组管理器。它可以在一处安装、整理和更新你的模组，并支持用于服装和纳米战衣模组的 Custom Nanosuit System (CNS)。\n\n它会连接 Nexus Mods，用于下载、检查更新，以及为你使用的模组点 Endorse。\n\n内置 7-Zip（7-zip.org），用于解压 .zip、.rar 和 .7z 压缩包。",
     "aboutEndorseCta": "喜欢这个应用吗？在 Nexus Mods 上点个 Endorse 会帮上大忙。",
     "aboutEndorseThanks": "感谢你的支持！",
     "aboutLinkText": "访问我的创作者个人资料",

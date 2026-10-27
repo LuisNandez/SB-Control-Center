@@ -463,7 +463,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutContent =>
-      'SB Control Center 是《Stellar Blade》的模组管理器。它可以在一处安装、整理和更新你的模组，并支持用于服装和纳米战衣模组的 Custom Nanosuit System (CNS)。\n\n它会连接 Nexus Mods，用于下载、检查更新，以及为你使用的模组点 Endorse。\n\n要求：要完整支持 .rar 和 .7z 压缩包，系统中需要安装 7-Zip。';
+      'SB Control Center 是《Stellar Blade》的模组管理器。它可以在一处安装、整理和更新你的模组，并支持用于服装和纳米战衣模组的 Custom Nanosuit System (CNS)。\n\n它会连接 Nexus Mods，用于下载、检查更新，以及为你使用的模组点 Endorse。\n\n内置 7-Zip（7-zip.org），用于解压 .zip、.rar 和 .7z 压缩包。';
 
   @override
   String get aboutEndorseCta => '喜欢这个应用吗？在 Nexus Mods 上点个 Endorse 会帮上大忙。';
