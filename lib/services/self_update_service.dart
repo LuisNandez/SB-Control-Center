@@ -30,7 +30,7 @@ class SelfUpdateException implements Exception {
   String toString() => message;
 }
 
-enum SelfUpdateStage { extracting, installing, restarting }
+enum SelfUpdateStage { downloading, extracting, installing, restarting }
 
 /// [fraction] va de 0 a 1 (null = indeterminado).
 typedef SelfUpdateProgress = void Function(

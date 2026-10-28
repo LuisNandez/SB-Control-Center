@@ -16,4 +16,6 @@ class AppPrefs {
   /// El usuario marcó "No volver a mostrar este mensaje" en el aviso que
   /// invita a configurar la API key de Nexus al abrir la app.
   static const String hideApiKeyPrompt = 'hideApiKeyPrompt';
+  /// Versión de la app que el usuario eligió "Omitir".
+  static const String skippedAppVersion = 'skippedAppVersion';
 }

@@ -35,6 +35,9 @@ class SelfUpdateDialog {
               final failed = s.error != null;
               final String message;
               switch (s.stage) {
+                case SelfUpdateStage.downloading:
+                  message = l10n.appUpdateDownloading;
+                  break;
                 case SelfUpdateStage.extracting:
                   message = l10n.devSelfUpdateExtracting;
                   break;

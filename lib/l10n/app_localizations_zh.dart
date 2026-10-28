@@ -1129,6 +1129,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get devSelfUpdateRestarting => '正在重启…';
 
   @override
+  String get appUpdateAvailableTitle => 'Update available';
+
+  @override
+  String appUpdateAvailableDesc(String current, String latest) {
+    return 'Version $latest is available (you have $current). The app will download it, close, update itself and open again.';
+  }
+
+  @override
+  String get settingsCheckAppUpdate => 'Check for app updates';
+
+  @override
+  String get settingsCheckAppUpdateDesc =>
+      'Look for a new version of SB Control Center on GitHub';
+
+  @override
+  String get appUpdateNow => 'Update now';
+
+  @override
+  String get appUpdateLater => 'Later';
+
+  @override
+  String get appUpdateSkip => 'Skip this version';
+
+  @override
+  String get appUpdateDownloading => 'Downloading update…';
+
+  @override
+  String get appUpdateUpToDate => 'You already have the latest version';
+
+  @override
+  String get appUpdateCheckFailed => 'Could not check for updates';
+
+  @override
   String get devExtractNoData => '未找到具有有效标识符的模组可供提取。';
 
   @override

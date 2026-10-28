@@ -1141,6 +1141,39 @@ class AppLocalizationsKo extends AppLocalizations {
   String get devSelfUpdateRestarting => '다시 시작하는 중…';
 
   @override
+  String get appUpdateAvailableTitle => 'Update available';
+
+  @override
+  String appUpdateAvailableDesc(String current, String latest) {
+    return 'Version $latest is available (you have $current). The app will download it, close, update itself and open again.';
+  }
+
+  @override
+  String get settingsCheckAppUpdate => 'Check for app updates';
+
+  @override
+  String get settingsCheckAppUpdateDesc =>
+      'Look for a new version of SB Control Center on GitHub';
+
+  @override
+  String get appUpdateNow => 'Update now';
+
+  @override
+  String get appUpdateLater => 'Later';
+
+  @override
+  String get appUpdateSkip => 'Skip this version';
+
+  @override
+  String get appUpdateDownloading => 'Downloading update…';
+
+  @override
+  String get appUpdateUpToDate => 'You already have the latest version';
+
+  @override
+  String get appUpdateCheckFailed => 'Could not check for updates';
+
+  @override
   String get devExtractNoData => '추출할 유효한 식별자가 있는 모드를 찾을 수 없습니다.';
 
   @override

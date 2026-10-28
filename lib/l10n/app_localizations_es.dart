@@ -1171,6 +1171,39 @@ class AppLocalizationsEs extends AppLocalizations {
   String get devSelfUpdateRestarting => 'Reiniciando…';
 
   @override
+  String get appUpdateAvailableTitle => 'Actualización disponible';
+
+  @override
+  String appUpdateAvailableDesc(String current, String latest) {
+    return 'La versión $latest está disponible (tienes la $current). La app la descargará, se cerrará, se actualizará y se abrirá de nuevo.';
+  }
+
+  @override
+  String get settingsCheckAppUpdate => 'Buscar actualizaciones de la app';
+
+  @override
+  String get settingsCheckAppUpdateDesc =>
+      'Busca una versión nueva de SB Control Center en GitHub';
+
+  @override
+  String get appUpdateNow => 'Actualizar ahora';
+
+  @override
+  String get appUpdateLater => 'Más tarde';
+
+  @override
+  String get appUpdateSkip => 'Omitir esta versión';
+
+  @override
+  String get appUpdateDownloading => 'Descargando actualización…';
+
+  @override
+  String get appUpdateUpToDate => 'Ya tienes la última versión';
+
+  @override
+  String get appUpdateCheckFailed => 'No se pudo buscar actualizaciones';
+
+  @override
   String get devExtractNoData =>
       'No se encontraron mods con identificadores válidos para extraer.';
 

@@ -23,6 +23,8 @@ class SettingsPage extends StatefulWidget {
   final VoidCallback onDeleteAllNexusInfo;
   final VoidCallback onExtractModIds;
   final VoidCallback onTestSelfUpdate;
+  /// Busca una versión nueva de la app en GitHub (con aviso manual).
+  final Future<void> Function() onCheckAppUpdate;
   final bool isDeveloperModeEnabled;
 
   final Future<String?> Function() onSelectGamePath;
@@ -56,6 +58,7 @@ class SettingsPage extends StatefulWidget {
     required this.onDeleteAllNexusInfo,
     required this.onExtractModIds,
     required this.onTestSelfUpdate,
+    required this.onCheckAppUpdate,
     required this.isDeveloperModeEnabled,
     required this.onSelectGamePath,
     required this.onShowApiKeyDialog,
@@ -91,6 +94,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   _Pane _selected = _Pane.general;
   bool _refreshingMetadata = false;
+  bool _checkingAppUpdate = false;
 
   @override
   void initState() {
@@ -551,6 +555,32 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitleColor: isApiKeySet ? IosColors.green : IosColors.orange,
             showChevron: true,
             onTap: _editApiKey,
+          ),
+          IosSettingsTile(
+            leading: IosIconBadge(
+              color: IosColors.blue,
+              child: _badgeIcon(HugeIcons.strokeRoundedArchiveArrowDown),
+            ),
+            title: l10n.settingsCheckAppUpdate,
+            subtitle: l10n.settingsCheckAppUpdateDesc,
+            trailing: _checkingAppUpdate
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+            showChevron: !_checkingAppUpdate,
+            onTap: _checkingAppUpdate
+                ? null
+                : () async {
+                    setState(() => _checkingAppUpdate = true);
+                    try {
+                      await widget.onCheckAppUpdate();
+                    } finally {
+                      if (mounted) setState(() => _checkingAppUpdate = false);
+                    }
+                  },
           ),
           IosSettingsTile(
             leading: IosIconBadge(

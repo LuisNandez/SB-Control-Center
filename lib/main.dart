@@ -49,6 +49,7 @@ import 'ui/dialogs/mod_location_picker.dart';
 import 'services/mod_metadata_migrator.dart';
 import 'services/update_service.dart';
 import 'services/self_update_service.dart';
+import 'services/github_update_service.dart';
 import 'ui/dialogs/self_update_dialog.dart';
 import 'services/special_mods_handler.dart';
 import 'ui/dialogs/special_mod_dialog.dart';
@@ -305,6 +306,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     
     // Esperamos a que todo se inicialice (incluyendo la carga de la API Key)
     _initialize().then((_) {
+      _checkForAppUpdate(); // sin await: no bloquea el arranque
       // Invita a configurar la API key de Nexus si no hay ninguna (opcional).
       _maybeShowApiKeyPrompt();
       // Solo registramos el listener y revisamos el link cuando todo está listo
@@ -403,6 +405,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     await _thumbnailService.initialize();
     await _cleanUpOrphanedTempDirs();
     await SelfUpdateService.cleanupLeftovers();
+    await GithubUpdateService.cleanupDownloads();
     await _loadModDatabase();
     await _loadLogicModIds();
     await _find7zipPath();
@@ -5246,6 +5249,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           onDeleteAllNexusInfo: _deleteAllNexusInfoFiles,
           onExtractModIds: _extractModIdentifiers,
           onTestSelfUpdate: _testSelfUpdate,
+          onCheckAppUpdate: () => _checkForAppUpdate(manual: true),
           isDeveloperModeEnabled: _developerModeEnabled,
           initialShowModTypeTags: _showModTypeTags,
           onShowModTypeTagsChanged: (newValue) async {
@@ -7708,10 +7712,97 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       );
       if (!confirm || !mounted) return;
     }
+    await _runSelfUpdate(zipPath: zipPath);
+  }
+
+  /// Consulta GitHub Releases. [manual] = true cuando lo pide el usuario
+  /// (muestra "ya estás al día" / errores y no respeta "Omitir").
+  Future<void> _checkForAppUpdate({bool manual = false}) async {
+    if (!SelfUpdateService.isSupported || _appVersion.isEmpty) return;
+    // En debug no se molesta con el aviso automático (no se puede aplicar).
+    if (!manual && !SelfUpdateService.canApply) return;
+
+    AppReleaseInfo? release;
+    try {
+      release = await GithubUpdateService.checkForUpdate(_appVersion);
+    } catch (e) {
+      print('App update check failed: $e');
+      if (manual && mounted) {
+        NotificationService.instance.show(
+          context: context,
+          type: NotificationType.error,
+          title: AppLocalizations.of(context)!.appUpdateCheckFailed,
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+
+    if (release == null) {
+      if (manual) {
+        NotificationService.instance.show(
+          context: context,
+          type: NotificationType.success,
+          title: l10n.appUpdateUpToDate,
+        );
+      }
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!manual &&
+        prefs.getString(AppPrefs.skippedAppVersion) == release.version) {
+      return;
+    }
+    if (!mounted) return;
+
+    var notes = release.notes;
+    if (notes.length > 600) notes = '${notes.substring(0, 600)}…';
+    final message = l10n.appUpdateAvailableDesc(_appVersion, release.version) +
+        (notes.isEmpty ? '' : '\n\n$notes');
+
+    final choice = await showIosDialog<String>(
+      context: context,
+      builder: (ctx) => IosDialogShell(
+        title: l10n.appUpdateAvailableTitle,
+        message: message,
+        actions: [
+          IosDialogButton(
+            label: l10n.appUpdateSkip,
+            onPressed: () => Navigator.of(ctx).pop('skip'),
+          ),
+          IosDialogButton(
+            label: l10n.appUpdateLater,
+            onPressed: () => Navigator.of(ctx).pop('later'),
+          ),
+          IosDialogButton(
+            label: l10n.appUpdateNow,
+            bold: true,
+            onPressed: () => Navigator.of(ctx).pop('update'),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == 'skip') {
+      await prefs.setString(AppPrefs.skippedAppVersion, release.version);
+    } else if (choice == 'update' && mounted) {
+      await _runSelfUpdate(release: release);
+    }
+  }
+
+  /// Flujo común: (descarga) → extrae → instala → reinicia.
+  /// Usa [zipPath] (zip local) o [release] (descarga desde GitHub).
+  Future<void> _runSelfUpdate({String? zipPath, AppReleaseInfo? release}) async {
+    assert(zipPath != null || release != null);
+    final l10n = AppLocalizations.of(context)!;
 
     final navigator = Navigator.of(context, rootNavigator: true);
     final state = ValueNotifier<SelfUpdateUiState>(
-      const SelfUpdateUiState(SelfUpdateStage.extracting),
+      SelfUpdateUiState(release != null
+          ? SelfUpdateStage.downloading
+          : SelfUpdateStage.extracting),
     );
     SelfUpdateDialog.show(context, state);
     // Deja que el diálogo se pinte antes de empezar el trabajo pesado.
@@ -7721,12 +7812,26 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       state.value = SelfUpdateUiState(stage, fraction: fraction);
     }
 
+    File? downloaded;
     SelfUpdatePlan? plan;
     try {
-      plan = await SelfUpdateService.prepareFromZip(
-        zipPath,
-        onProgress: report,
-      );
+      var path = zipPath;
+      if (release != null) {
+        downloaded = await GithubUpdateService.download(
+          release,
+          onProgress: (f) => report(SelfUpdateStage.downloading, f),
+        );
+        path = downloaded.path;
+      }
+
+      plan = await SelfUpdateService.prepareFromZip(path!, onProgress: report);
+
+      if (downloaded != null) {
+        try {
+          await downloaded.delete();
+        } catch (_) {}
+        downloaded = null;
+      }
 
       // Debug/profile: solo se valida el paquete, no se toca la app en ejecución.
       if (!SelfUpdateService.canApply) {
@@ -7751,6 +7856,11 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       await Future<void>.delayed(const Duration(milliseconds: 600));
     } catch (e) {
       if (plan != null) await SelfUpdateService.discard(plan);
+      try {
+        if (downloaded != null && await downloaded.exists()) {
+          await downloaded.delete();
+        }
+      } catch (_) {}
       // El diálogo pasa a mostrar el error con un botón Cerrar.
       state.value = SelfUpdateUiState(
         SelfUpdateStage.extracting,

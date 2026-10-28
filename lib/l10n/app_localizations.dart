@@ -2062,6 +2062,66 @@ abstract class AppLocalizations {
   /// **'Restarting…'**
   String get devSelfUpdateRestarting;
 
+  /// No description provided for @appUpdateAvailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get appUpdateAvailableTitle;
+
+  /// No description provided for @appUpdateAvailableDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {latest} is available (you have {current}). The app will download it, close, update itself and open again.'**
+  String appUpdateAvailableDesc(String current, String latest);
+
+  /// No description provided for @settingsCheckAppUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for app updates'**
+  String get settingsCheckAppUpdate;
+
+  /// No description provided for @settingsCheckAppUpdateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Look for a new version of SB Control Center on GitHub'**
+  String get settingsCheckAppUpdateDesc;
+
+  /// No description provided for @appUpdateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Update now'**
+  String get appUpdateNow;
+
+  /// No description provided for @appUpdateLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get appUpdateLater;
+
+  /// No description provided for @appUpdateSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip this version'**
+  String get appUpdateSkip;
+
+  /// No description provided for @appUpdateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading update…'**
+  String get appUpdateDownloading;
+
+  /// No description provided for @appUpdateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have the latest version'**
+  String get appUpdateUpToDate;
+
+  /// No description provided for @appUpdateCheckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check for updates'**
+  String get appUpdateCheckFailed;
+
   /// No description provided for @devExtractNoData.
   ///
   /// In en, this message translates to:
