@@ -436,18 +436,39 @@
   "devSelfUpdateInstalling": "Installing files…",
   "devSelfUpdateRestarting": "Restarting…",
   "appUpdateAvailableTitle": "Update available",
-  "appUpdateAvailableDesc": "Version {latest} is available (you have {current}). The app will download it, close, update itself and open again.",
-  "@appUpdateAvailableDesc": {
-    "placeholders": { "current": { "type": "String" }, "latest": { "type": "String" } }
+  "appUpdateAvailableMsg": "The app will download the update, install it and restart automatically.",
+  "appUpdateInstalledLabel": "INSTALLED",
+  "appUpdateAvailableLabel": "AVAILABLE",
+  "appUpdateDownloadSize": "Download size: {size}",
+  "@appUpdateDownloadSize": {
+    "placeholders": { "size": { "type": "String" } }
   },
-  "settingsCheckAppUpdate": "Check for app updates",
-  "settingsCheckAppUpdateDesc": "Look for a new version of SB Control Center on GitHub",
   "appUpdateNow": "Update now",
   "appUpdateLater": "Later",
   "appUpdateSkip": "Skip this version",
   "appUpdateDownloading": "Downloading update…",
   "appUpdateUpToDate": "You already have the latest version",
   "appUpdateCheckFailed": "Could not check for updates",
+  "settingsCheckAppUpdate": "Check for app updates",
+  "settingsCheckAppUpdateDesc": "Look for a new version of SB Control Center on GitHub",
+  "settingsChangelog": "Changelog",
+  "settingsChangelogDesc": "See what's new in each version",
+  "changelogWhatsNewTitle": "What's new in {version}",
+  "@changelogWhatsNewTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogUpdatedSubtitle": "SB Control Center was updated successfully",
+  "changelogHistoryTitle": "Changelog",
+  "changelogInstalledVersion": "Installed version: {version}",
+  "@changelogInstalledVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogInstalledBadge": "Installed",
+  "changelogPrereleaseBadge": "Pre-release",
+  "changelogEmpty": "This release has no notes.",
+  "changelogViewOnGithub": "View on GitHub",
+  "changelogLoadFailed": "Could not load the changelog. Check your connection.",
+  "changelogRetry": "Retry",
   "devExtractNoData": "No mods with valid identifiers were found to extract.",
   "devExtractDesktopNotFound": "Error: Could not find the Desktop directory.",
   "devExtractSuccessTitle": "Extraction Complete",

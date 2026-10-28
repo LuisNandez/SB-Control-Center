@@ -2068,23 +2068,29 @@ abstract class AppLocalizations {
   /// **'Update available'**
   String get appUpdateAvailableTitle;
 
-  /// No description provided for @appUpdateAvailableDesc.
+  /// No description provided for @appUpdateAvailableMsg.
   ///
   /// In en, this message translates to:
-  /// **'Version {latest} is available (you have {current}). The app will download it, close, update itself and open again.'**
-  String appUpdateAvailableDesc(String current, String latest);
+  /// **'The app will download the update, install it and restart automatically.'**
+  String get appUpdateAvailableMsg;
 
-  /// No description provided for @settingsCheckAppUpdate.
+  /// No description provided for @appUpdateInstalledLabel.
   ///
   /// In en, this message translates to:
-  /// **'Check for app updates'**
-  String get settingsCheckAppUpdate;
+  /// **'INSTALLED'**
+  String get appUpdateInstalledLabel;
 
-  /// No description provided for @settingsCheckAppUpdateDesc.
+  /// No description provided for @appUpdateAvailableLabel.
   ///
   /// In en, this message translates to:
-  /// **'Look for a new version of SB Control Center on GitHub'**
-  String get settingsCheckAppUpdateDesc;
+  /// **'AVAILABLE'**
+  String get appUpdateAvailableLabel;
+
+  /// No description provided for @appUpdateDownloadSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Download size: {size}'**
+  String appUpdateDownloadSize(String size);
 
   /// No description provided for @appUpdateNow.
   ///
@@ -2121,6 +2127,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not check for updates'**
   String get appUpdateCheckFailed;
+
+  /// No description provided for @settingsCheckAppUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for app updates'**
+  String get settingsCheckAppUpdate;
+
+  /// No description provided for @settingsCheckAppUpdateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Look for a new version of SB Control Center on GitHub'**
+  String get settingsCheckAppUpdateDesc;
+
+  /// No description provided for @settingsChangelog.
+  ///
+  /// In en, this message translates to:
+  /// **'Changelog'**
+  String get settingsChangelog;
+
+  /// No description provided for @settingsChangelogDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'See what\'s new in each version'**
+  String get settingsChangelogDesc;
+
+  /// No description provided for @changelogWhatsNewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s new in {version}'**
+  String changelogWhatsNewTitle(String version);
+
+  /// No description provided for @changelogUpdatedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'SB Control Center was updated successfully'**
+  String get changelogUpdatedSubtitle;
+
+  /// No description provided for @changelogHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Changelog'**
+  String get changelogHistoryTitle;
+
+  /// No description provided for @changelogInstalledVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed version: {version}'**
+  String changelogInstalledVersion(String version);
+
+  /// No description provided for @changelogInstalledBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get changelogInstalledBadge;
+
+  /// No description provided for @changelogPrereleaseBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Pre-release'**
+  String get changelogPrereleaseBadge;
+
+  /// No description provided for @changelogEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This release has no notes.'**
+  String get changelogEmpty;
+
+  /// No description provided for @changelogViewOnGithub.
+  ///
+  /// In en, this message translates to:
+  /// **'View on GitHub'**
+  String get changelogViewOnGithub;
+
+  /// No description provided for @changelogLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the changelog. Check your connection.'**
+  String get changelogLoadFailed;
+
+  /// No description provided for @changelogRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get changelogRetry;
 
   /// No description provided for @devExtractNoData.
   ///

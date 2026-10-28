@@ -18,4 +18,9 @@ class AppPrefs {
   static const String hideApiKeyPrompt = 'hideApiKeyPrompt';
   /// Versión de la app que el usuario eligió "Omitir".
   static const String skippedAppVersion = 'skippedAppVersion';
+  /// Notas de la versión que se está instalando; se muestran al abrir la app
+  /// ya actualizada (JSON: from, version, name, notes, url).
+  static const String pendingChangelog = 'pendingChangelog';
+  /// Última lista de releases descargada (para ver el changelog sin conexión).
+  static const String releasesCache = 'releasesCache';
 }

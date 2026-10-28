@@ -8,7 +8,9 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/app_prefs.dart';
 import '../utils/version_utils.dart';
 import 'self_update_service.dart';
 
@@ -34,6 +36,47 @@ class AppReleaseInfo {
   });
 }
 
+/// Notas de una release publicada (para mostrar el changelog).
+class ReleaseNotes {
+  final String tag;
+  final String version;
+  final String name;
+  final String notes;
+  final String url;
+  final DateTime? publishedAt;
+  final bool prerelease;
+
+  const ReleaseNotes({
+    required this.tag,
+    required this.version,
+    required this.name,
+    required this.notes,
+    required this.url,
+    required this.publishedAt,
+    required this.prerelease,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'tag': tag,
+        'version': version,
+        'name': name,
+        'notes': notes,
+        'url': url,
+        'publishedAt': publishedAt?.toIso8601String(),
+        'prerelease': prerelease,
+      };
+
+  factory ReleaseNotes.fromJson(Map<String, dynamic> j) => ReleaseNotes(
+        tag: (j['tag'] as String?) ?? '',
+        version: (j['version'] as String?) ?? '',
+        name: (j['name'] as String?) ?? '',
+        notes: (j['notes'] as String?) ?? '',
+        url: (j['url'] as String?) ?? '',
+        publishedAt: DateTime.tryParse((j['publishedAt'] as String?) ?? ''),
+        prerelease: j['prerelease'] == true,
+      );
+}
+
 class GithubUpdateService {
   static const String owner = 'LuisNandez';
   static const String repo = 'SB-Control-Center';
@@ -43,6 +86,78 @@ class GithubUpdateService {
     'User-Agent': 'SB-Control-Center',
     'X-GitHub-Api-Version': '2022-11-28',
   };
+
+  /// Acepta cualquier formato de tag: "v3.0.1", "3.0.1", "Release-v3.0.1"...
+  /// Toma el primer número con puntos que encuentre (3.0.1).
+  static String _versionFromTag(String tag) =>
+      RegExp(r'\d+(?:\.\d+)+').firstMatch(tag)?.group(0) ?? '';
+
+  /// Tamaño legible (p. ej. "48.2 MB").
+  static String formatSize(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var v = bytes.toDouble();
+    var u = 0;
+    while (v >= 1024 && u < units.length - 1) {
+      v /= 1024;
+      u++;
+    }
+    return '${v.toStringAsFixed(u == 0 ? 0 : 1)} ${units[u]}';
+  }
+
+  /// Lista de releases publicadas (más nueva primero), con notas.
+  /// Si no hay conexión usa la última lista guardada; si tampoco existe, lanza.
+  static Future<List<ReleaseNotes>> fetchReleases({int limit = 30}) async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final uri = Uri.https(
+        'api.github.com',
+        '/repos/$owner/$repo/releases',
+        {'per_page': '$limit'},
+      );
+      final res = await http
+          .get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) {
+        throw SelfUpdateException('GitHub responded ${res.statusCode}.');
+      }
+      final list = json.decode(utf8.decode(res.bodyBytes)) as List<dynamic>;
+      final out = <ReleaseNotes>[];
+      for (final r in list) {
+        if (r is! Map<String, dynamic>) continue;
+        if (r['draft'] == true) continue;
+        final tag = (r['tag_name'] as String?) ?? '';
+        final version = _versionFromTag(tag);
+        if (version.isEmpty) continue;
+        out.add(ReleaseNotes(
+          tag: tag,
+          version: version,
+          name: ((r['name'] as String?) ?? '').trim(),
+          notes: ((r['body'] as String?) ?? '').trim(),
+          url: (r['html_url'] as String?) ??
+              'https://github.com/$owner/$repo/releases',
+          publishedAt:
+              DateTime.tryParse((r['published_at'] as String?) ?? '')?.toLocal(),
+          prerelease: r['prerelease'] == true,
+        ));
+      }
+      await prefs.setString(
+        AppPrefs.releasesCache,
+        json.encode([for (final r in out) r.toJson()]),
+      );
+      return out;
+    } catch (e) {
+      final cached = prefs.getString(AppPrefs.releasesCache);
+      if (cached != null) {
+        try {
+          return [
+            for (final j in json.decode(cached) as List<dynamic>)
+              ReleaseNotes.fromJson(j as Map<String, dynamic>),
+          ];
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
 
   /// Devuelve la release más reciente si es MÁS NUEVA que [currentVersion];
   /// null si ya estás al día (o la release no trae un .zip).
@@ -63,9 +178,7 @@ class GithubUpdateService {
     if (data['draft'] == true || data['prerelease'] == true) return null;
 
     final tag = (data['tag_name'] as String?) ?? '';
-    // Acepta cualquier formato de tag: "v3.0.1", "3.0.1", "Release-v3.0.1"...
-    // Toma el primer número con puntos que encuentre (3.0.1).
-    final version = RegExp(r'\d+(?:\.\d+)+').firstMatch(tag)?.group(0) ?? '';
+    final version = _versionFromTag(tag);
     if (version.isEmpty) return null;
     if (VersionUtils.compareVersions(version, currentVersion) <= 0) return null;
 

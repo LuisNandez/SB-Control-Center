@@ -25,6 +25,8 @@ class SettingsPage extends StatefulWidget {
   final VoidCallback onTestSelfUpdate;
   /// Busca una versión nueva de la app en GitHub (con aviso manual).
   final Future<void> Function() onCheckAppUpdate;
+  /// Abre el historial de versiones (changelog).
+  final Future<void> Function() onShowChangelog;
   final bool isDeveloperModeEnabled;
 
   final Future<String?> Function() onSelectGamePath;
@@ -59,6 +61,7 @@ class SettingsPage extends StatefulWidget {
     required this.onExtractModIds,
     required this.onTestSelfUpdate,
     required this.onCheckAppUpdate,
+    required this.onShowChangelog,
     required this.isDeveloperModeEnabled,
     required this.onSelectGamePath,
     required this.onShowApiKeyDialog,
@@ -581,6 +584,16 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (mounted) setState(() => _checkingAppUpdate = false);
                     }
                   },
+          ),
+          IosSettingsTile(
+            leading: IosIconBadge(
+              color: IosColors.purple,
+              child: _badgeIcon(HugeIcons.strokeRoundedBook04),
+            ),
+            title: l10n.settingsChangelog,
+            subtitle: l10n.settingsChangelogDesc,
+            showChevron: true,
+            onTap: widget.onShowChangelog,
           ),
           IosSettingsTile(
             leading: IosIconBadge(

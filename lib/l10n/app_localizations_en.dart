@@ -1167,16 +1167,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appUpdateAvailableTitle => 'Update available';
 
   @override
-  String appUpdateAvailableDesc(String current, String latest) {
-    return 'Version $latest is available (you have $current). The app will download it, close, update itself and open again.';
+  String get appUpdateAvailableMsg =>
+      'The app will download the update, install it and restart automatically.';
+
+  @override
+  String get appUpdateInstalledLabel => 'INSTALLED';
+
+  @override
+  String get appUpdateAvailableLabel => 'AVAILABLE';
+
+  @override
+  String appUpdateDownloadSize(String size) {
+    return 'Download size: $size';
   }
-
-  @override
-  String get settingsCheckAppUpdate => 'Check for app updates';
-
-  @override
-  String get settingsCheckAppUpdateDesc =>
-      'Look for a new version of SB Control Center on GitHub';
 
   @override
   String get appUpdateNow => 'Update now';
@@ -1195,6 +1198,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appUpdateCheckFailed => 'Could not check for updates';
+
+  @override
+  String get settingsCheckAppUpdate => 'Check for app updates';
+
+  @override
+  String get settingsCheckAppUpdateDesc =>
+      'Look for a new version of SB Control Center on GitHub';
+
+  @override
+  String get settingsChangelog => 'Changelog';
+
+  @override
+  String get settingsChangelogDesc => 'See what\'s new in each version';
+
+  @override
+  String changelogWhatsNewTitle(String version) {
+    return 'What\'s new in $version';
+  }
+
+  @override
+  String get changelogUpdatedSubtitle =>
+      'SB Control Center was updated successfully';
+
+  @override
+  String get changelogHistoryTitle => 'Changelog';
+
+  @override
+  String changelogInstalledVersion(String version) {
+    return 'Installed version: $version';
+  }
+
+  @override
+  String get changelogInstalledBadge => 'Installed';
+
+  @override
+  String get changelogPrereleaseBadge => 'Pre-release';
+
+  @override
+  String get changelogEmpty => 'This release has no notes.';
+
+  @override
+  String get changelogViewOnGithub => 'View on GitHub';
+
+  @override
+  String get changelogLoadFailed =>
+      'Could not load the changelog. Check your connection.';
+
+  @override
+  String get changelogRetry => 'Retry';
 
   @override
   String get devExtractNoData =>

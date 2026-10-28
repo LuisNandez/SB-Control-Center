@@ -50,6 +50,7 @@ import 'services/mod_metadata_migrator.dart';
 import 'services/update_service.dart';
 import 'services/self_update_service.dart';
 import 'services/github_update_service.dart';
+import 'ui/dialogs/changelog_dialogs.dart';
 import 'ui/dialogs/self_update_dialog.dart';
 import 'services/special_mods_handler.dart';
 import 'ui/dialogs/special_mod_dialog.dart';
@@ -306,7 +307,9 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     
     // Esperamos a que todo se inicialice (incluyendo la carga de la API Key)
     _initialize().then((_) {
-      _checkForAppUpdate(); // sin await: no bloquea el arranque
+      // Primero las novedades de una actualización recién instalada y después
+      // la búsqueda de una versión nueva (sin await: no bloquea el arranque).
+      _showPendingChangelog().then((_) => _checkForAppUpdate());
       // Invita a configurar la API key de Nexus si no hay ninguna (opcional).
       _maybeShowApiKeyPrompt();
       // Solo registramos el listener y revisamos el link cuando todo está listo
@@ -5250,6 +5253,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           onExtractModIds: _extractModIdentifiers,
           onTestSelfUpdate: _testSelfUpdate,
           onCheckAppUpdate: () => _checkForAppUpdate(manual: true),
+          onShowChangelog: _showChangelogHistory,
           isDeveloperModeEnabled: _developerModeEnabled,
           initialShowModTypeTags: _showModTypeTags,
           onShowModTypeTagsChanged: (newValue) async {
@@ -7757,39 +7761,107 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     }
     if (!mounted) return;
 
-    var notes = release.notes;
-    if (notes.length > 600) notes = '${notes.substring(0, 600)}…';
-    final message = l10n.appUpdateAvailableDesc(_appVersion, release.version) +
-        (notes.isEmpty ? '' : '\n\n$notes');
+    final AppReleaseInfo info = release;
+    final String? sizeLabel = info.size == null
+        ? null
+        : l10n.appUpdateDownloadSize(GithubUpdateService.formatSize(info.size!));
 
     final choice = await showIosDialog<String>(
       context: context,
       builder: (ctx) => IosDialogShell(
         title: l10n.appUpdateAvailableTitle,
-        message: message,
+        message: l10n.appUpdateAvailableMsg,
+        stacked: true,
+        content: UpdateVersionCard(
+          current: _appVersion,
+          latest: info.version,
+          currentLabel: l10n.appUpdateInstalledLabel,
+          latestLabel: l10n.appUpdateAvailableLabel,
+          footer: sizeLabel,
+        ),
         actions: [
           IosDialogButton(
-            label: l10n.appUpdateSkip,
-            onPressed: () => Navigator.of(ctx).pop('skip'),
+            label: l10n.appUpdateNow,
+            bold: true,
+            onPressed: () => Navigator.of(ctx).pop('update'),
           ),
           IosDialogButton(
             label: l10n.appUpdateLater,
             onPressed: () => Navigator.of(ctx).pop('later'),
           ),
           IosDialogButton(
-            label: l10n.appUpdateNow,
-            bold: true,
-            onPressed: () => Navigator.of(ctx).pop('update'),
+            label: l10n.appUpdateSkip,
+            onPressed: () => Navigator.of(ctx).pop('skip'),
           ),
         ],
       ),
     );
 
     if (choice == 'skip') {
-      await prefs.setString(AppPrefs.skippedAppVersion, release.version);
+      await prefs.setString(AppPrefs.skippedAppVersion, info.version);
     } else if (choice == 'update' && mounted) {
-      await _runSelfUpdate(release: release);
+      await _runSelfUpdate(release: info);
     }
+  }
+
+  /// Guarda las notas de la versión que se va a instalar.
+  Future<void> _savePendingChangelog(AppReleaseInfo release) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        AppPrefs.pendingChangelog,
+        json.encode({
+          'from': _appVersion,
+          'version': release.version,
+          'name': release.name,
+          'notes': release.notes,
+          'url': release.pageUrl,
+        }),
+      );
+    } catch (e) {
+      print('Could not save pending changelog: $e');
+    }
+  }
+
+  Future<void> _clearPendingChangelog() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(AppPrefs.pendingChangelog);
+    } catch (_) {}
+  }
+
+  /// Si la app acaba de actualizarse, muestra las novedades de esa versión.
+  Future<void> _showPendingChangelog() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(AppPrefs.pendingChangelog);
+      if (raw == null) return;
+      // Se borra ya: las novedades se muestran una sola vez.
+      await prefs.remove(AppPrefs.pendingChangelog);
+
+      final data = json.decode(raw) as Map<String, dynamic>;
+      final from = (data['from'] as String?) ?? '';
+      // Misma versión que antes = la actualización no se aplicó (se revirtió).
+      if (_appVersion.isEmpty || from == _appVersion) return;
+      if (!mounted) return;
+
+      final l10n = AppLocalizations.of(context)!;
+      await ChangelogDialogs.showRelease(
+        context,
+        title: l10n.changelogWhatsNewTitle((data['version'] as String?) ?? _appVersion),
+        subtitle: l10n.changelogUpdatedSubtitle,
+        notes: (data['notes'] as String?) ?? '',
+        url: data['url'] as String?,
+      );
+    } catch (e) {
+      print('Could not show pending changelog: $e');
+    }
+  }
+
+  /// Historial de versiones (Ajustes → Changelog).
+  Future<void> _showChangelogHistory() async {
+    if (!mounted) return;
+    await ChangelogDialogs.showHistory(context, currentVersion: _appVersion);
   }
 
   /// Flujo común: (descarga) → extrae → instala → reinicia.
@@ -7849,12 +7921,15 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         return;
       }
 
+      // Guarda las notas para mostrarlas cuando se abra la versión nueva.
+      if (release != null) await _savePendingChangelog(release);
       await SelfUpdateService.install(plan, onProgress: report);
 
       report(SelfUpdateStage.restarting, null);
       await SelfUpdateService.relaunch(plan);
       await Future<void>.delayed(const Duration(milliseconds: 600));
     } catch (e) {
+      await _clearPendingChangelog();
       if (plan != null) await SelfUpdateService.discard(plan);
       try {
         if (downloaded != null && await downloaded.exists()) {

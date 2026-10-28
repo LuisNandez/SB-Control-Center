@@ -324,18 +324,39 @@
     "devSelfUpdateInstalling": "Instalando archivos…",
     "devSelfUpdateRestarting": "Reiniciando…",
     "appUpdateAvailableTitle": "Actualización disponible",
-    "appUpdateAvailableDesc": "La versión {latest} está disponible (tienes la {current}). La app la descargará, se cerrará, se actualizará y se abrirá de nuevo.",
-    "@appUpdateAvailableDesc": {
-      "placeholders": { "current": { "type": "String" }, "latest": { "type": "String" } }
+    "appUpdateAvailableMsg": "La app descargará la actualización, la instalará y se reiniciará sola.",
+    "appUpdateInstalledLabel": "INSTALADA",
+    "appUpdateAvailableLabel": "DISPONIBLE",
+    "appUpdateDownloadSize": "Tamaño de descarga: {size}",
+    "@appUpdateDownloadSize": {
+      "placeholders": { "size": { "type": "String" } }
     },
-    "settingsCheckAppUpdate": "Buscar actualizaciones de la app",
-    "settingsCheckAppUpdateDesc": "Busca una versión nueva de SB Control Center en GitHub",
     "appUpdateNow": "Actualizar ahora",
     "appUpdateLater": "Más tarde",
     "appUpdateSkip": "Omitir esta versión",
     "appUpdateDownloading": "Descargando actualización…",
     "appUpdateUpToDate": "Ya tienes la última versión",
     "appUpdateCheckFailed": "No se pudo buscar actualizaciones",
+    "settingsCheckAppUpdate": "Buscar actualizaciones de la app",
+    "settingsCheckAppUpdateDesc": "Busca una versión nueva de SB Control Center en GitHub",
+    "settingsChangelog": "Registro de cambios",
+    "settingsChangelogDesc": "Mira las novedades de cada versión",
+    "changelogWhatsNewTitle": "Novedades de la versión {version}",
+    "@changelogWhatsNewTitle": {
+      "placeholders": { "version": { "type": "String" } }
+    },
+    "changelogUpdatedSubtitle": "SB Control Center se actualizó correctamente",
+    "changelogHistoryTitle": "Registro de cambios",
+    "changelogInstalledVersion": "Versión instalada: {version}",
+    "@changelogInstalledVersion": {
+      "placeholders": { "version": { "type": "String" } }
+    },
+    "changelogInstalledBadge": "Instalada",
+    "changelogPrereleaseBadge": "Preliminar",
+    "changelogEmpty": "Esta versión no tiene notas.",
+    "changelogViewOnGithub": "Ver en GitHub",
+    "changelogLoadFailed": "No se pudo cargar el registro de cambios. Revisa tu conexión.",
+    "changelogRetry": "Reintentar",
     "devExtractNoData": "No se encontraron mods con identificadores válidos para extraer.",
     "devExtractDesktopNotFound": "Error: No se pudo encontrar el directorio del Escritorio.",
     "devExtractSuccessTitle": "Extracción Completa",

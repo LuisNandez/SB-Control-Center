@@ -1174,16 +1174,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get appUpdateAvailableTitle => 'Actualización disponible';
 
   @override
-  String appUpdateAvailableDesc(String current, String latest) {
-    return 'La versión $latest está disponible (tienes la $current). La app la descargará, se cerrará, se actualizará y se abrirá de nuevo.';
+  String get appUpdateAvailableMsg =>
+      'La app descargará la actualización, la instalará y se reiniciará sola.';
+
+  @override
+  String get appUpdateInstalledLabel => 'INSTALADA';
+
+  @override
+  String get appUpdateAvailableLabel => 'DISPONIBLE';
+
+  @override
+  String appUpdateDownloadSize(String size) {
+    return 'Tamaño de descarga: $size';
   }
-
-  @override
-  String get settingsCheckAppUpdate => 'Buscar actualizaciones de la app';
-
-  @override
-  String get settingsCheckAppUpdateDesc =>
-      'Busca una versión nueva de SB Control Center en GitHub';
 
   @override
   String get appUpdateNow => 'Actualizar ahora';
@@ -1202,6 +1205,55 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get appUpdateCheckFailed => 'No se pudo buscar actualizaciones';
+
+  @override
+  String get settingsCheckAppUpdate => 'Buscar actualizaciones de la app';
+
+  @override
+  String get settingsCheckAppUpdateDesc =>
+      'Busca una versión nueva de SB Control Center en GitHub';
+
+  @override
+  String get settingsChangelog => 'Registro de cambios';
+
+  @override
+  String get settingsChangelogDesc => 'Mira las novedades de cada versión';
+
+  @override
+  String changelogWhatsNewTitle(String version) {
+    return 'Novedades de la versión $version';
+  }
+
+  @override
+  String get changelogUpdatedSubtitle =>
+      'SB Control Center se actualizó correctamente';
+
+  @override
+  String get changelogHistoryTitle => 'Registro de cambios';
+
+  @override
+  String changelogInstalledVersion(String version) {
+    return 'Versión instalada: $version';
+  }
+
+  @override
+  String get changelogInstalledBadge => 'Instalada';
+
+  @override
+  String get changelogPrereleaseBadge => 'Preliminar';
+
+  @override
+  String get changelogEmpty => 'Esta versión no tiene notas.';
+
+  @override
+  String get changelogViewOnGithub => 'Ver en GitHub';
+
+  @override
+  String get changelogLoadFailed =>
+      'No se pudo cargar el registro de cambios. Revisa tu conexión.';
+
+  @override
+  String get changelogRetry => 'Reintentar';
 
   @override
   String get devExtractNoData =>
