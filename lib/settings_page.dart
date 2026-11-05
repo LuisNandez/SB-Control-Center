@@ -17,6 +17,7 @@ import 'ui/widgets/self_endorse_section.dart';
 import 'ui/theme/app_metrics.dart';
 import 'ui/widgets/app_title_bar.dart';
 import 'ui/widgets/window_chrome_settings.dart';
+import 'ui/widgets/ui_scale_settings.dart';
 
 class SettingsPage extends StatefulWidget {
   final String? initialGameRootPath;
@@ -484,6 +485,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+      // Tamaño de letra y de las tarjetas.
+      ...uiScaleSections(context),
       // Botones de la ventana y barra fusionada.
       ...windowChromeSections(context),
     ];

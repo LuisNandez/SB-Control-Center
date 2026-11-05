@@ -38,6 +38,7 @@ import 'services/game_locator_service.dart';
 import 'services/gpu_preference_service.dart';
 import 'services/eco_mode_service.dart';
 import 'services/window_state_service.dart';
+import 'services/ui_scale_service.dart';
 import 'ui/widgets/mod_grid_card.dart';
 import 'ui/widgets/mod_list_tile.dart';
 import 'ui/widgets/mod_details_panel.dart';
@@ -167,6 +168,9 @@ void main(List<String> args) async {
 
   // Botones de la ventana y barra fusionada (preferencias guardadas).
   await WindowChrome.init(startupPrefs);
+
+  // Tamaño de letra y de tarjetas elegidos por el usuario.
+  UiScale.init(startupPrefs);
 
   runApp(ModInstallerApp(
     initialTheme: startupTheme,
@@ -361,8 +365,21 @@ class _ModInstallerAppState extends State<ModInstallerApp>
       locale: _locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      builder: (context, child) =>
-          AppWindowFrame(child: EcoModeLayer(child: child!)),
+      // El tamaño de letra se aplica solo al contenido (no al marco de la
+      // ventana, cuya barra tiene alto fijo). Los diálogos y las páginas
+      // cuelgan del Navigator, así que también lo heredan.
+      builder: (context, child) => AppWindowFrame(
+        child: EcoModeLayer(
+          child: ValueListenableBuilder<double>(
+            valueListenable: UiScale.text,
+            builder: (context, double scale, _) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+          ),
+        ),
+      ),
       home: const ModInstallerHomePage(),
     );
   }
@@ -7556,8 +7573,11 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                   child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: _viewMode == ModListViewMode.grid
-                      ? GridView.builder(
+                      ? ValueListenableBuilder<double>(
                           key: const ValueKey('grid'),
+                          valueListenable: UiScale.cards,
+                          builder: (context, double cardScale, _) =>
+                              GridView.builder(
                           controller: _gridScrollController,
                           // Construye (y decodifica las portadas de) unas filas
                           // por delante de lo visible: al hacer scroll las
@@ -7565,22 +7585,24 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                           cacheExtent: 700,
                           padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
                           // Material: tarjetas algo más anchas y con más aire.
+                          // Ajustes → Apariencia → "Tamaño de las tarjetas"
+                          // multiplica el ancho máximo de cada tarjeta.
                           gridDelegate: AppLayouts.isMinimal
-                              ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 240,
+                              ? SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 240 * cardScale,
                                   childAspectRatio: 0.66,
                                   crossAxisSpacing: 16,
                                   mainAxisSpacing: 16,
                                 )
                               : AppMetrics.u
-                              ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 250,
+                              ? SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 250 * cardScale,
                                   childAspectRatio: 0.66,
                                   crossAxisSpacing: AppMetrics.cardGap,
                                   mainAxisSpacing: AppMetrics.cardGap,
                                 )
-                              : const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 220,
+                              : SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 220 * cardScale,
                                   childAspectRatio: 3 / 4.5,
                                   crossAxisSpacing: 14,
                                   mainAxisSpacing: 14,
@@ -7594,9 +7616,14 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                               grid: true,
                             );
                           },
+                        ),
                         )
-                      : ListView.builder(
+                      : ValueListenableBuilder<double>(
                           key: const ValueKey('list'),
+                          valueListenable: UiScale.cards,
+                          // Las filas leen UiScale.cards; este builder las
+                          // reconstruye al cambiar el tamaño.
+                          builder: (context, double _, __) => ListView.builder(
                           controller: _listScrollController,
                           cacheExtent: 700,
                           padding: const EdgeInsets.only(bottom: 12),
@@ -7609,6 +7636,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                               grid: false,
                             );
                           },
+                        ),
                         ),
                 ),
                 ),

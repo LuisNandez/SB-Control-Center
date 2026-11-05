@@ -43,4 +43,8 @@ class AppPrefs {
   static const String pendingChangelog = 'pendingChangelog';
   /// Última lista de releases descargada (para ver el changelog sin conexión).
   static const String releasesCache = 'releasesCache';
+  /// Ajustes → Apariencia → "Tamaño de letra" (factor, 1.0 = 100 %).
+  static const String uiTextScale = 'uiTextScale';
+  /// Ajustes → Apariencia → "Tamaño de las tarjetas" (factor, 1.0 = 100 %).
+  static const String uiCardScale = 'uiCardScale';
 }

@@ -6,6 +6,7 @@ import '../../l10n/app_localizations.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_metrics.dart';
 import '../theme/ios_theme.dart';
+import '../../services/ui_scale_service.dart';
 import 'animated_mod_switch.dart';
 import 'ios_widgets.dart';
 
@@ -82,6 +83,8 @@ class ModListTile extends StatelessWidget {
             ? IosColors.blue
             : (md ? Colors.transparent : IosColors.overlay(0x14)));
     final bool hasRing = showUpdate || isHighlighted;
+    // Ajustes → Apariencia → "Tamaño de las tarjetas": alto de la fila.
+    final double cs = UiScale.cards.value;
 
     String? updateVersionText;
     if (showUpdate) {
@@ -90,10 +93,10 @@ class ModListTile extends StatelessWidget {
     }
 
     return Container(
-      margin: EdgeInsets.symmetric(vertical: u ? 6 : 3),
+      margin: EdgeInsets.symmetric(vertical: (u ? 6 : 3) * cs),
       padding: EdgeInsets.symmetric(
         horizontal: MinimalStyle.on ? 14 : (u ? AppMetrics.cardPadding : 12),
-        vertical: MinimalStyle.on ? 10 : (u ? 12 : 8),
+        vertical: (MinimalStyle.on ? 10 : (u ? 12 : 8)) * cs,
       ),
       decoration: MinimalStyle.on ? BoxDecoration(color: isHighlighted
                   ? Color.alphaBlend(IosColors.blue.withOpacity(0.16), IosColors.card)
@@ -111,8 +114,8 @@ class ModListTile extends StatelessWidget {
         children: [
           // Icono "squircle" como en Ajustes de iOS.
           Container(
-            width: u ? AppMetrics.iconButton : 34,
-            height: u ? AppMetrics.iconButton : 34,
+            width: (u ? AppMetrics.iconButton : 34) * cs,
+            height: (u ? AppMetrics.iconButton : 34) * cs,
             decoration: MinimalStyle.on ? BoxDecoration(
               color: MinimalStyle.mutedFill,
               borderRadius: BorderRadius.circular(MinimalStyle.controlRadius),
