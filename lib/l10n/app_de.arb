@@ -6,6 +6,36 @@
     "settingsGeneral": "Allgemein",
     "settingsLanguage": "Sprache",
     "settingsLanguageDesc": "Wählen Sie die Anwendungssprache",
+    "settingsTheme": "Design",
+    "settingsThemeDesc": "Wähle das Aussehen der App. „Automatisch“ folgt dem hellen oder dunklen Modus des Systems.",
+    "themeSystem": "Automatisch",
+    "themeDark": "Dunkel",
+    "themeMidnight": "Mitternacht",
+    "themeLight": "Hell",
+    "themeOcean": "Ozean",
+    "themeForest": "Wald",
+    "themeViolet": "Violett",
+    "themeSand": "Sand",
+    "themeCocoa": "Kakao",
+    "settingsAppearance": "Darstellung",
+    "settingsLayout": "Layout",
+    "settingsLayoutDesc": "Wähle das Layout des Hauptfensters: macOS-Stil (transparent und abgerundet), Material mit größeren Karten oder Flach (klar, mit feinen Linien). Wird sofort angewendet.",
+    "layoutMacos": "macOS-Stil",
+    "layoutMaterial": "Material",
+    "layoutFlat": "Flach",
+    "settingsGpuAccel": "Grafikkarte verwenden",
+    "settingsGpuAccelDesc": "Bevorzugt die dedizierte GPU, falls vorhanden",
+    "settingsGpuAccelFooter": "Weist Windows an, die App mit der Hochleistungsgrafik auszuführen – nützlich bei Notebooks mit integrierter und dedizierter Grafik. Hat der PC nur eine Grafikkarte, ändert sich nichts. Wird nach einem Neustart der App wirksam.",
+    "settingsGpuAccelRestart": "App neu starten, um die Änderung zu übernehmen",
+    "settingsGpuAccelFailed": "Die Grafikeinstellung von Windows konnte nicht geändert werden",
+    "settingsGpuAccelSingle": "Dein PC hat nur eine Grafikkarte",
+    "settingsGpuRestartTitle": "Jetzt neu starten?",
+    "settingsGpuRestartMsg": "Um die Grafikänderung zu übernehmen, wird die App geschlossen und automatisch wieder geöffnet.",
+    "settingsGpuRestartNow": "Jetzt neu starten",
+    "settingsGpuRestartLater": "Später",
+    "ecoModeTitle": "Sparmodus",
+    "ecoModeMessage": "Stellar Blade läuft. Die App verbraucht so wenig Ressourcen wie möglich und kehrt automatisch zum Normalbetrieb zurück, sobald du das Spiel beendest.",
+    "ecoModeShowApp": "App trotzdem anzeigen",
     "settingsAbout": "Über",
     "settingsAboutDesc": "Informationen über die Anwendung",
     "settingsRefreshMetadata": "Metadaten aktualisieren",
@@ -645,5 +675,50 @@
   "errorAdjustingCoverText": "Fehler beim Anpassen des Covers: {error}",
   "@errorAdjustingCoverText": {
     "placeholders": { "error": {} }
-  }
+  },
+  "appUpdateAvailableTitle": "Update verfügbar",
+  "appUpdateAvailableMsg": "Die App lädt das Update herunter, installiert es und startet automatisch neu.",
+  "appUpdateInstalledLabel": "INSTALLIERT",
+  "appUpdateAvailableLabel": "VERFÜGBAR",
+  "appUpdateDownloadSize": "Downloadgröße: {size}",
+  "@appUpdateDownloadSize": {
+    "placeholders": { "size": { "type": "String" } }
+  },
+  "appUpdateNow": "Jetzt aktualisieren",
+  "appUpdateLater": "Später",
+  "appUpdateSkip": "Diese Version überspringen",
+  "appUpdateDownloading": "Update wird heruntergeladen…",
+  "appUpdateUpToDate": "Du hast bereits die neueste Version",
+  "appUpdateCheckFailed": "Updates konnten nicht geprüft werden",
+  "settingsCheckAppUpdate": "Nach App-Updates suchen",
+  "settingsCheckAppUpdateDesc": "Auf GitHub nach einer neuen Version von SB Control Center suchen",
+  "settingsChangelog": "Änderungsprotokoll",
+  "settingsChangelogDesc": "Sieh dir an, was in jeder Version neu ist",
+  "changelogWhatsNewTitle": "Neu in {version}",
+  "@changelogWhatsNewTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogUpdatedSubtitle": "SB Control Center wurde erfolgreich aktualisiert",
+  "changelogHistoryTitle": "Änderungsprotokoll",
+  "changelogInstalledVersion": "Installierte Version: {version}",
+  "@changelogInstalledVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogInstalledBadge": "Installiert",
+  "changelogPrereleaseBadge": "Vorabversion",
+  "changelogEmpty": "Diese Version hat keine Notizen.",
+  "changelogViewOnGithub": "Auf GitHub ansehen",
+  "changelogLoadFailed": "Das Änderungsprotokoll konnte nicht geladen werden. Prüfe deine Verbindung.",
+  "changelogRetry": "Erneut versuchen",
+  "settingsSkippedAppVersion": "App-Update übersprungen",
+  "settingsSkippedAppVersionDesc": "Version {version} ist ausgeblendet. Tippe, um wieder darüber benachrichtigt zu werden.",
+  "@settingsSkippedAppVersionDesc": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedTitle": "Version {version} übersprungen",
+  "@appUpdateSkippedTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedDesc": "Du kannst das unter Einstellungen › Konnektivität & Updates rückgängig machen.",
+  "appUpdateUnskippedTitle": "Du wirst wieder über App-Updates benachrichtigt"
 }

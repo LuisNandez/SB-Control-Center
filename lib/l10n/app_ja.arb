@@ -6,6 +6,36 @@
     "settingsGeneral": "一般",
     "settingsLanguage": "言語",
     "settingsLanguageDesc": "アプリケーションの言語を選択してください",
+    "settingsTheme": "テーマ",
+    "settingsThemeDesc": "アプリの外観を選択します。「自動」はシステムのライト/ダークモードに従います。",
+    "themeSystem": "自動",
+    "themeDark": "ダーク",
+    "themeMidnight": "ミッドナイト",
+    "themeLight": "ライト",
+    "themeOcean": "オーシャン",
+    "themeForest": "フォレスト",
+    "themeViolet": "バイオレット",
+    "themeSand": "サンド",
+    "themeCocoa": "ココア",
+    "settingsAppearance": "外観",
+    "settingsLayout": "レイアウト",
+    "settingsLayoutDesc": "メインウィンドウのレイアウトを選択します。macOSスタイル（半透明で丸みのある見た目）、大きめのカードのMaterial、またはフラット（すっきりした細い線）。すぐに反映されます。",
+    "layoutMacos": "macOSスタイル",
+    "layoutMaterial": "Material",
+    "layoutFlat": "フラット",
+    "settingsGpuAccel": "グラフィックカードを使用",
+    "settingsGpuAccelDesc": "搭載されている場合は専用GPUを優先します",
+    "settingsGpuAccelFooter": "Windowsに、高パフォーマンスのグラフィックカードでアプリを実行するよう指示します。内蔵GPUと専用GPUを搭載したノートPCで有効です。グラフィックカードが1つだけの場合は何も変わりません。アプリの再起動後に反映されます。",
+    "settingsGpuAccelRestart": "変更を反映するにはアプリを再起動してください",
+    "settingsGpuAccelFailed": "Windowsのグラフィック設定を変更できませんでした",
+    "settingsGpuAccelSingle": "このPCにはグラフィックカードが1つしかありません",
+    "settingsGpuRestartTitle": "今すぐ再起動しますか？",
+    "settingsGpuRestartMsg": "グラフィックの変更を反映するため、アプリを閉じて自動的に開き直します。",
+    "settingsGpuRestartNow": "今すぐ再起動",
+    "settingsGpuRestartLater": "後で",
+    "ecoModeTitle": "省電力モード",
+    "ecoModeMessage": "Stellar Bladeを実行中です。アプリは使用するリソースを最小限に抑え、ゲームを終了すると自動的に通常の状態に戻ります。",
+    "ecoModeShowApp": "それでもアプリを表示",
     "settingsAbout": "概要",
     "settingsAboutDesc": "アプリケーションに関する情報",
     "settingsRefreshMetadata": "メタデータを更新",
@@ -645,5 +675,50 @@
   "errorAdjustingCoverText": "カバーの調整中にエラーが発生しました: {error}",
   "@errorAdjustingCoverText": {
     "placeholders": { "error": {} }
-  }
+  },
+  "appUpdateAvailableTitle": "アップデートがあります",
+  "appUpdateAvailableMsg": "アプリがアップデートをダウンロードしてインストールし、自動的に再起動します。",
+  "appUpdateInstalledLabel": "インストール済み",
+  "appUpdateAvailableLabel": "利用可能",
+  "appUpdateDownloadSize": "ダウンロードサイズ: {size}",
+  "@appUpdateDownloadSize": {
+    "placeholders": { "size": { "type": "String" } }
+  },
+  "appUpdateNow": "今すぐアップデート",
+  "appUpdateLater": "後で",
+  "appUpdateSkip": "このバージョンをスキップ",
+  "appUpdateDownloading": "アップデートをダウンロード中…",
+  "appUpdateUpToDate": "すでに最新バージョンです",
+  "appUpdateCheckFailed": "アップデートを確認できませんでした",
+  "settingsCheckAppUpdate": "アプリのアップデートを確認",
+  "settingsCheckAppUpdateDesc": "GitHubでSB Control Centerの新しいバージョンを確認します",
+  "settingsChangelog": "変更履歴",
+  "settingsChangelogDesc": "各バージョンの新機能を確認します",
+  "changelogWhatsNewTitle": "{version}の新機能",
+  "@changelogWhatsNewTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogUpdatedSubtitle": "SB Control Centerを正常にアップデートしました",
+  "changelogHistoryTitle": "変更履歴",
+  "changelogInstalledVersion": "インストール済みのバージョン: {version}",
+  "@changelogInstalledVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogInstalledBadge": "インストール済み",
+  "changelogPrereleaseBadge": "プレリリース",
+  "changelogEmpty": "このリリースにはノートがありません。",
+  "changelogViewOnGithub": "GitHubで見る",
+  "changelogLoadFailed": "変更履歴を読み込めませんでした。接続を確認してください。",
+  "changelogRetry": "再試行",
+  "settingsSkippedAppVersion": "スキップしたアプリのアップデート",
+  "settingsSkippedAppVersionDesc": "バージョン{version}は非表示になっています。タップすると再び通知されます。",
+  "@settingsSkippedAppVersionDesc": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedTitle": "バージョン{version}をスキップしました",
+  "@appUpdateSkippedTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedDesc": "「設定 › 接続とアップデート」で元に戻せます。",
+  "appUpdateUnskippedTitle": "今後はアプリのアップデートが再び通知されます"
 }

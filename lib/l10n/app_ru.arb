@@ -6,6 +6,36 @@
     "settingsGeneral": "Общие",
     "settingsLanguage": "Язык",
     "settingsLanguageDesc": "Выберите язык приложения",
+    "settingsTheme": "Тема",
+    "settingsThemeDesc": "Выберите внешний вид приложения. «Автоматически» следует светлому или тёмному режиму системы.",
+    "themeSystem": "Автоматически",
+    "themeDark": "Тёмная",
+    "themeMidnight": "Полночь",
+    "themeLight": "Светлая",
+    "themeOcean": "Океан",
+    "themeForest": "Лес",
+    "themeViolet": "Фиолетовая",
+    "themeSand": "Песок",
+    "themeCocoa": "Какао",
+    "settingsAppearance": "Внешний вид",
+    "settingsLayout": "Макет",
+    "settingsLayoutDesc": "Выберите вид главного окна: Стиль macOS (полупрозрачный, со скруглениями), Material с более крупными карточками или Плоский (чистый, с тонкими контурами). Применяется сразу.",
+    "layoutMacos": "Стиль macOS",
+    "layoutMaterial": "Material",
+    "layoutFlat": "Плоский",
+    "settingsGpuAccel": "Использовать видеокарту",
+    "settingsGpuAccelDesc": "Предпочитает дискретный GPU, если он есть",
+    "settingsGpuAccelFooter": "Просит Windows запускать приложение на высокопроизводительной видеокарте — полезно для ноутбуков со встроенной и дискретной графикой. Если в компьютере одна видеокарта, ничего не изменится. Применяется после перезапуска приложения.",
+    "settingsGpuAccelRestart": "Перезапустите приложение, чтобы применить изменение",
+    "settingsGpuAccelFailed": "Не удалось изменить настройку графики Windows",
+    "settingsGpuAccelSingle": "В компьютере только одна видеокарта",
+    "settingsGpuRestartTitle": "Перезапустить сейчас?",
+    "settingsGpuRestartMsg": "Чтобы применить изменение видеокарты, приложение закроется и автоматически откроется снова.",
+    "settingsGpuRestartNow": "Перезапустить сейчас",
+    "settingsGpuRestartLater": "Позже",
+    "ecoModeTitle": "Режим экономии",
+    "ecoModeMessage": "Stellar Blade запущена. Приложение использует минимум ресурсов и вернётся в обычный режим, когда вы закроете игру.",
+    "ecoModeShowApp": "Всё равно показать приложение",
     "settingsAbout": "О программе",
     "settingsAboutDesc": "Информация о приложении",
     "settingsRefreshMetadata": "Обновить метаданные",
@@ -645,5 +675,50 @@
   "errorAdjustingCoverText": "Ошибка при настройке обложки: {error}",
   "@errorAdjustingCoverText": {
     "placeholders": { "error": {} }
-  }
+  },
+  "appUpdateAvailableTitle": "Доступно обновление",
+  "appUpdateAvailableMsg": "Приложение скачает обновление, установит его и автоматически перезапустится.",
+  "appUpdateInstalledLabel": "УСТАНОВЛЕНО",
+  "appUpdateAvailableLabel": "ДОСТУПНО",
+  "appUpdateDownloadSize": "Размер загрузки: {size}",
+  "@appUpdateDownloadSize": {
+    "placeholders": { "size": { "type": "String" } }
+  },
+  "appUpdateNow": "Обновить сейчас",
+  "appUpdateLater": "Позже",
+  "appUpdateSkip": "Пропустить эту версию",
+  "appUpdateDownloading": "Загрузка обновления…",
+  "appUpdateUpToDate": "У вас уже установлена последняя версия",
+  "appUpdateCheckFailed": "Не удалось проверить обновления",
+  "settingsCheckAppUpdate": "Проверить обновления приложения",
+  "settingsCheckAppUpdateDesc": "Поиск новой версии SB Control Center на GitHub",
+  "settingsChangelog": "Список изменений",
+  "settingsChangelogDesc": "Узнайте, что нового в каждой версии",
+  "changelogWhatsNewTitle": "Что нового в {version}",
+  "@changelogWhatsNewTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogUpdatedSubtitle": "SB Control Center успешно обновлён",
+  "changelogHistoryTitle": "Список изменений",
+  "changelogInstalledVersion": "Установленная версия: {version}",
+  "@changelogInstalledVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogInstalledBadge": "Установлена",
+  "changelogPrereleaseBadge": "Пре-релиз",
+  "changelogEmpty": "В этом релизе нет примечаний.",
+  "changelogViewOnGithub": "Открыть на GitHub",
+  "changelogLoadFailed": "Не удалось загрузить список изменений. Проверьте подключение.",
+  "changelogRetry": "Повторить",
+  "settingsSkippedAppVersion": "Пропущенное обновление приложения",
+  "settingsSkippedAppVersionDesc": "Версия {version} скрыта. Нажмите, чтобы снова получать уведомления о ней.",
+  "@settingsSkippedAppVersionDesc": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedTitle": "Версия {version} пропущена",
+  "@appUpdateSkippedTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedDesc": "Вы можете отменить это в разделе Настройки › Подключение и обновления.",
+  "appUpdateUnskippedTitle": "Вы снова будете получать уведомления об обновлениях приложения"
 }

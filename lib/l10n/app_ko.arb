@@ -6,6 +6,36 @@
     "settingsGeneral": "일반",
     "settingsLanguage": "언어",
     "settingsLanguageDesc": "애플리케이션 언어 선택",
+    "settingsTheme": "테마",
+    "settingsThemeDesc": "앱의 모양을 선택합니다. '자동'은 시스템의 라이트/다크 모드를 따릅니다.",
+    "themeSystem": "자동",
+    "themeDark": "다크",
+    "themeMidnight": "미드나이트",
+    "themeLight": "라이트",
+    "themeOcean": "오션",
+    "themeForest": "포레스트",
+    "themeViolet": "바이올렛",
+    "themeSand": "샌드",
+    "themeCocoa": "코코아",
+    "settingsAppearance": "모양",
+    "settingsLayout": "레이아웃",
+    "settingsLayoutDesc": "메인 창의 레이아웃을 선택합니다. macOS 스타일(반투명하고 둥근 스타일), 더 큰 카드의 Material, 또는 플랫(깔끔한 얇은 선). 즉시 적용됩니다.",
+    "layoutMacos": "macOS 스타일",
+    "layoutMaterial": "Material",
+    "layoutFlat": "플랫",
+    "settingsGpuAccel": "그래픽 카드 사용",
+    "settingsGpuAccelDesc": "전용 GPU가 있으면 우선 사용합니다",
+    "settingsGpuAccelFooter": "Windows가 앱을 고성능 그래픽 카드로 실행하도록 요청합니다. 내장 그래픽과 전용 그래픽이 함께 있는 노트북에서 유용합니다. 그래픽 카드가 하나뿐이면 달라지는 것은 없습니다. 앱을 다시 시작하면 적용됩니다.",
+    "settingsGpuAccelRestart": "변경 사항을 적용하려면 앱을 다시 시작하세요",
+    "settingsGpuAccelFailed": "Windows 그래픽 기본 설정을 변경하지 못했습니다",
+    "settingsGpuAccelSingle": "이 PC에는 그래픽 카드가 하나뿐입니다",
+    "settingsGpuRestartTitle": "지금 다시 시작할까요?",
+    "settingsGpuRestartMsg": "그래픽 변경 사항을 적용하기 위해 앱이 종료된 후 자동으로 다시 열립니다.",
+    "settingsGpuRestartNow": "지금 다시 시작",
+    "settingsGpuRestartLater": "나중에",
+    "ecoModeTitle": "절전 모드",
+    "ecoModeMessage": "Stellar Blade가 실행 중입니다. 앱이 리소스를 최소한으로 사용하며, 게임을 종료하면 자동으로 원래 상태로 돌아옵니다.",
+    "ecoModeShowApp": "그래도 앱 표시",
     "settingsAbout": "정보",
     "settingsAboutDesc": "애플리케이션에 대한 정보",
     "settingsRefreshMetadata": "메타데이터 업데이트",
@@ -645,5 +675,50 @@
   "errorAdjustingCoverText": "커버 조정 중 오류 발생: {error}",
   "@errorAdjustingCoverText": {
     "placeholders": { "error": {} }
-  }
+  },
+  "appUpdateAvailableTitle": "업데이트 사용 가능",
+  "appUpdateAvailableMsg": "앱이 업데이트를 다운로드하고 설치한 후 자동으로 다시 시작합니다.",
+  "appUpdateInstalledLabel": "설치됨",
+  "appUpdateAvailableLabel": "사용 가능",
+  "appUpdateDownloadSize": "다운로드 크기: {size}",
+  "@appUpdateDownloadSize": {
+    "placeholders": { "size": { "type": "String" } }
+  },
+  "appUpdateNow": "지금 업데이트",
+  "appUpdateLater": "나중에",
+  "appUpdateSkip": "이 버전 건너뛰기",
+  "appUpdateDownloading": "업데이트 다운로드 중…",
+  "appUpdateUpToDate": "이미 최신 버전입니다",
+  "appUpdateCheckFailed": "업데이트를 확인할 수 없습니다",
+  "settingsCheckAppUpdate": "앱 업데이트 확인",
+  "settingsCheckAppUpdateDesc": "GitHub에서 SB Control Center의 새 버전을 확인합니다",
+  "settingsChangelog": "변경 내역",
+  "settingsChangelogDesc": "각 버전의 새로운 기능을 확인하세요",
+  "changelogWhatsNewTitle": "{version}의 새로운 기능",
+  "@changelogWhatsNewTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogUpdatedSubtitle": "SB Control Center가 성공적으로 업데이트되었습니다",
+  "changelogHistoryTitle": "변경 내역",
+  "changelogInstalledVersion": "설치된 버전: {version}",
+  "@changelogInstalledVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogInstalledBadge": "설치됨",
+  "changelogPrereleaseBadge": "사전 릴리스",
+  "changelogEmpty": "이 릴리스에는 노트가 없습니다.",
+  "changelogViewOnGithub": "GitHub에서 보기",
+  "changelogLoadFailed": "변경 내역을 불러올 수 없습니다. 연결을 확인하세요.",
+  "changelogRetry": "다시 시도",
+  "settingsSkippedAppVersion": "건너뛴 앱 업데이트",
+  "settingsSkippedAppVersionDesc": "버전 {version}이(가) 숨겨져 있습니다. 탭하면 다시 알림을 받습니다.",
+  "@settingsSkippedAppVersionDesc": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedTitle": "버전 {version} 건너뜀",
+  "@appUpdateSkippedTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedDesc": "설정 › 연결 및 업데이트에서 되돌릴 수 있습니다.",
+  "appUpdateUnskippedTitle": "앞으로 앱 업데이트 알림을 다시 받습니다"
 }

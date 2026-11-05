@@ -5,6 +5,7 @@ import 'package:hugeicons/hugeicons.dart';
 import '../../services/mod_locations_service.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/ios_widgets.dart';
+import '../theme/app_metrics.dart';
 
 /// Cuando un mod tiene archivos en varias carpetas del juego, deja elegir
 /// cuál abrir. El diálogo NO se cierra al abrir una carpeta (se pueden abrir
@@ -32,8 +33,8 @@ class ModLocationPicker {
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: const Color(0x14FFFFFF),
-                borderRadius: BorderRadius.circular(10),
+                color: IosColors.overlay(0x14),
+                borderRadius: AppMetrics.radius(10),
               ),
               child: ListView(
                 shrinkWrap: true,
@@ -140,9 +141,9 @@ class _LocationRowState extends State<_LocationRow> {
     final loc = widget.location;
     final active = _hover || _pressed;
     final Color bg = _pressed
-        ? const Color(0x730A84FF) // azul ~45%
+        ? IosColors.blue.withAlpha(0x73) // azul ~45%
         : _hover
-            ? const Color(0x4D0A84FF) // azul ~30%
+            ? IosColors.blue.withAlpha(0x4D) // azul ~30%
             : Colors.transparent;
 
     return MouseRegion(
@@ -163,7 +164,7 @@ class _LocationRowState extends State<_LocationRow> {
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppMetrics.radius(8),
             border: Border.all(
               color: active ? IosColors.blue : Colors.transparent,
               width: 1.2,
@@ -187,7 +188,7 @@ class _LocationRowState extends State<_LocationRow> {
                       ' · ${loc.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: IosColors.label,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
@@ -203,7 +204,7 @@ class _LocationRowState extends State<_LocationRow> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: active
-                              ? const Color(0xCCEBEBF5)
+                              ? IosColors.label.withAlpha(0xCC)
                               : IosColors.secondaryLabel,
                           fontSize: 11.5,
                         ),
@@ -216,7 +217,7 @@ class _LocationRowState extends State<_LocationRow> {
               AnimatedOpacity(
                 duration: const Duration(milliseconds: 150),
                 opacity: _opened ? 1 : 0,
-                child: const Icon(
+                child: Icon(
                   Icons.check_circle_rounded,
                   size: 18,
                   color: IosColors.green,

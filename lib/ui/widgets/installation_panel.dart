@@ -14,6 +14,8 @@ import 'ios_motion.dart';
 import 'ios_progress_bar.dart';
 import 'ios_settings_widgets.dart';
 import 'ios_widgets.dart';
+import '../theme/app_metrics.dart';
+import 'material_layout_widgets.dart';
 
 /// Traduce los colores Material que envía main.dart ("statusColor") a la
 /// paleta de sistema de iOS.
@@ -373,7 +375,7 @@ class _InstallationPanelContentState extends State<InstallationPanelContent> {
                         margin: const EdgeInsets.only(bottom: 14),
                         decoration: BoxDecoration(
                           color: IosColors.tertiaryLabel,
-                          borderRadius: BorderRadius.circular(3),
+                          borderRadius: AppMetrics.radius(3),
                         ),
                       ),
                     ),
@@ -384,7 +386,7 @@ class _InstallationPanelContentState extends State<InstallationPanelContent> {
                             l10n.installNewMod,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
                               letterSpacing: -0.5,
@@ -498,7 +500,7 @@ class _InstallationPanelContentState extends State<InstallationPanelContent> {
               // ---- Barra inferior fija -------------------------------------
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: IosColors.background,
                   border: Border(
                     top: BorderSide(color: IosColors.separator, width: 0.5),
@@ -531,9 +533,8 @@ class _InstallationPanelContentState extends State<InstallationPanelContent> {
                     Opacity(opacity: t, child: child),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xE61C1C1E),
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(14)),
+                    color: IosColors.background.withAlpha(0xE6),
+                    borderRadius: AppMetrics.sheetRadius(14),
                     border: Border.all(color: IosColors.blue, width: 2),
                   ),
                   child: Center(
@@ -548,7 +549,7 @@ class _InstallationPanelContentState extends State<InstallationPanelContent> {
                               shape: BoxShape.circle,
                               color: IosColors.blue.withOpacity(0.18),
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.file_download_rounded,
                               size: 40,
                               color: IosColors.blue,
@@ -558,7 +559,7 @@ class _InstallationPanelContentState extends State<InstallationPanelContent> {
                         const SizedBox(height: 16),
                         Text(
                           l10n.dropTargetOverlay,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: IosColors.label,
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -613,7 +614,7 @@ class _SectionHeader extends StatelessWidget {
                 title.replaceAll(RegExp(r'[:：]\s*$'), ''),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.3,
@@ -627,7 +628,7 @@ class _SectionHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: IosColors.chip,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppMetrics.radius(10),
                 ),
                 child: IosCountText(
                   text: '$count',
@@ -673,8 +674,8 @@ class _GroupCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: IosColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0x0FFFFFFF), width: 0.5),
+        borderRadius: AppMetrics.radius(14),
+        border: Border.all(color: IosColors.overlay(0x0F), width: 0.5),
       ),
       child: Column(children: rows),
     );
@@ -711,9 +712,9 @@ class _DropZoneState extends State<_DropZone> {
     final bool active = widget.enabled && _hover;
     final Color border = active
         ? IosColors.blue
-        : (widget.enabled ? const Color(0x40EBEBF5) : const Color(0x1FEBEBF5));
+        : (widget.enabled ? IosColors.label.withAlpha(0x40) : IosColors.label.withAlpha(0x1F));
     final Color fill =
-        active ? IosColors.blue.withOpacity(0.10) : const Color(0x0DFFFFFF);
+        active ? IosColors.blue.withOpacity(0.10) : IosColors.overlay(0x0D);
 
     final Widget content = widget.compact
         ? Row(
@@ -734,7 +735,7 @@ class _DropZoneState extends State<_DropZone> {
                   l10n.selectModArchive,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.2,
@@ -742,7 +743,7 @@ class _DropZoneState extends State<_DropZone> {
                   ),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
                 color: IosColors.tertiaryLabel,
@@ -766,7 +767,7 @@ class _DropZoneState extends State<_DropZone> {
               Text(
                 l10n.selectModArchive,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15.5,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.3,
@@ -777,7 +778,7 @@ class _DropZoneState extends State<_DropZone> {
               Text(
                 l10n.dropTargetOverlay,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12.5,
                   color: IosColors.secondaryLabel,
                 ),
@@ -962,7 +963,7 @@ class _PreviewRow extends StatelessWidget {
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.2,
@@ -977,7 +978,7 @@ class _PreviewRow extends StatelessWidget {
                       f,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: IosColors.secondaryLabel,
                       ),
@@ -988,7 +989,7 @@ class _PreviewRow extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 3),
                     child: Text(
                       '+$extra',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: IosColors.tertiaryLabel,
@@ -1004,12 +1005,12 @@ class _PreviewRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
                 color: IosColors.chip,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppMetrics.radius(8),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.insert_drive_file_outlined,
                     size: 11,
                     color: IosColors.secondaryLabel,
@@ -1060,8 +1061,8 @@ class _ActivityCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
         decoration: BoxDecoration(
           color: IosColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0x0FFFFFFF), width: 0.5),
+          borderRadius: AppMetrics.radius(14),
+          border: Border.all(color: IosColors.overlay(0x0F), width: 0.5),
         ),
         child: Row(
           children: [
@@ -1080,7 +1081,7 @@ class _ActivityCard extends StatelessWidget {
                     status,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w500,
                       letterSpacing: -0.2,
@@ -1132,7 +1133,7 @@ class _StatusBanner extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
           color: accent.withOpacity(0.14),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: AppMetrics.radius(14),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1284,7 +1285,7 @@ class _DownloadQueue extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 3),
                       child: Text(
                         n,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           height: 1.35,
                           color: IosColors.secondaryLabel,
@@ -1310,19 +1311,25 @@ class _PlanChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color c = plan.isPremium ? IosColors.yellow : IosColors.green;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      constraints: mdChipConstraints,
+      padding: EdgeInsets.symmetric(
+        horizontal: AppMetrics.u ? 10 : 7,
+        vertical: AppMetrics.u ? 0 : 2,
+      ),
       decoration: BoxDecoration(
         color: c.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: AppMetrics.radius(6),
       ),
-      child: Text(
-        (plan.isPremium ? l10n.nexusPlanPremium : l10n.nexusPlanSupporter)
-            .toUpperCase(),
-        style: TextStyle(
-          fontSize: 9.5,
-          letterSpacing: 0.4,
-          fontWeight: FontWeight.w700,
-          color: c,
+      child: mdChipChild(
+        Text(
+          (plan.isPremium ? l10n.nexusPlanPremium : l10n.nexusPlanSupporter)
+              .toUpperCase(),
+          style: TextStyle(
+            fontSize: AppMetrics.u ? 11 : 9.5,
+            letterSpacing: 0.4,
+            fontWeight: FontWeight.w700,
+            color: c,
+          ),
         ),
       ),
     );
@@ -1354,7 +1361,7 @@ class _QueueSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = progress.clamp(0.0, 1.0).toDouble();
     return Container(
-      color: const Color(0x0AFFFFFF),
+      color: IosColors.overlay(0x0A),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1365,27 +1372,32 @@ class _QueueSummary extends StatelessWidget {
             children: [
               for (final c in chips)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  constraints: mdChipConstraints,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppMetrics.u ? 10 : 9,
+                    vertical: AppMetrics.u ? 0 : 4,
+                  ),
                   decoration: BoxDecoration(
                     color: c.color.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: AppMetrics.radius(20),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(c.icon, size: 13, color: c.color),
-                      const SizedBox(width: 5),
-                      Text(
-                        c.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.1,
-                          color: c.color,
+                  child: mdChipChild(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(c.icon, size: 13, color: c.color),
+                        const SizedBox(width: 5),
+                        Text(
+                          c.label,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.1,
+                            color: c.color,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
             ],
@@ -1573,7 +1585,7 @@ class _DownloadRow extends StatelessWidget {
                       task.fileName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.2,
@@ -1595,7 +1607,7 @@ class _DownloadRow extends StatelessWidget {
                               meta,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: IosColors.secondaryLabel,
                               ),
@@ -1654,7 +1666,7 @@ class _DownloadRow extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
                 decoration: BoxDecoration(
                   color: IosColors.red.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppMetrics.radius(10),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1663,7 +1675,7 @@ class _DownloadRow extends StatelessWidget {
                       task.errorMessage ?? l10n.downloadErrorGeneral,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         height: 1.3,
                         color: IosColors.red,
@@ -1717,9 +1729,9 @@ class _FileTile extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 color: IosColors.chip,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: AppMetrics.radius(11),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.folder_zip_rounded,
                 size: 23,
                 color: IosColors.icon,
@@ -1777,7 +1789,7 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
       decoration: BoxDecoration(
         color: color.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: AppMetrics.radius(7),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1825,7 +1837,7 @@ class _CircleAction extends StatelessWidget {
         child: Container(
           width: 32,
           height: 32,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: IosColors.chip,
           ),
@@ -1921,7 +1933,7 @@ class _RingPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
-        ..color = const Color(0x26FFFFFF),
+        ..color = IosColors.overlay(0x26),
     );
 
     if (progress <= 0) return;

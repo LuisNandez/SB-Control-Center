@@ -8,6 +8,8 @@ import '../../outfit_data.dart';
 import '../theme/ios_theme.dart';
 import 'ios_motion.dart';
 import 'ios_widgets.dart';
+import '../theme/app_metrics.dart';
+import 'material_layout_widgets.dart';
 
 // ============================================================================
 //  UTILIDADES COMPARTIDAS
@@ -229,8 +231,8 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
                 width: 36,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: const Color(0x4DEBEBF5),
-                  borderRadius: BorderRadius.circular(3),
+                  color: IosColors.tertiaryLabel,
+                  borderRadius: AppMetrics.radius(3),
                 ),
               ),
             ),
@@ -257,7 +259,7 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
                         l10n.replacesOutfitTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           letterSpacing: -0.2,
@@ -266,7 +268,7 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
                       ),
                       IosCountText(
                         text: l10n.outfitsSelectedCount(_selected.length),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11.5,
                           letterSpacing: -0.05,
                           color: IosColors.secondaryLabel,
@@ -394,7 +396,7 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
                     ? l10n.outfitsNoResults(_query.trim())
                     : l10n.outfitsSelectedEmpty,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13.5,
                   height: 1.35,
                   color: IosColors.secondaryLabel,
@@ -430,10 +432,10 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
   Widget _buildPreview(AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Color(0x40000000),
         border: Border(
-          left: BorderSide(color: Color(0x24FFFFFF), width: 0.5),
+          left: BorderSide(color: IosColors.overlay(0x24), width: 0.5),
         ),
       ),
       child: ValueListenableBuilder<String?>(
@@ -449,7 +451,7 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.image_outlined,
                           size: 52,
                           color: IosColors.tertiaryLabel,
@@ -458,7 +460,7 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
                         Text(
                           l10n.replacesOutfitHover,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             height: 1.35,
                             color: IosColors.secondaryLabel,
@@ -500,8 +502,10 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
       },
       child: SizedBox.expand(
       child: IosGlass(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        color: const Color(0xE01C1C1E),
+        borderRadius: AppMetrics.sheetRadius(16),
+        color: AppMetrics.u
+            ? IosColors.background
+            : IosColors.background.withAlpha(0xE0),
         child: Material(
           type: MaterialType.transparency,
           child: LayoutBuilder(
@@ -519,7 +523,7 @@ class _OutfitPickerSheetState extends State<_OutfitPickerSheet> {
                   _buildHeader(l10n),
                   _buildSearchRow(l10n),
                   _buildSelectedTray(l10n),
-                  Container(height: 0.5, color: const Color(0x24FFFFFF)),
+                  Container(height: 0.5, color: IosColors.overlay(0x24)),
                   Expanded(
                     child: wide
                         ? Row(
@@ -569,13 +573,16 @@ class _SelectedChip extends StatelessWidget {
         scale: 0.94,
         onTap: onRemove,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 190),
-          padding: const EdgeInsets.fromLTRB(11, 6, 8, 6),
+          constraints: BoxConstraints(
+            maxWidth: 190,
+            minHeight: AppMetrics.u ? AppMetrics.chipHeight : 0,
+          ),
+          padding: EdgeInsets.fromLTRB(11, AppMetrics.u ? 0 : 6, 8, AppMetrics.u ? 0 : 6),
           decoration: BoxDecoration(
             color: IosColors.blue.withOpacity(0.16),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppMetrics.radius(16),
           ),
-          child: Row(
+          child: mdChipChild(Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(
@@ -583,7 +590,7 @@ class _SelectedChip extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w500,
                     letterSpacing: -0.1,
@@ -592,9 +599,9 @@ class _SelectedChip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.close_rounded, size: 14, color: IosColors.blue),
+              Icon(Icons.close_rounded, size: 14, color: IosColors.blue),
             ],
-          ),
+          )),
         ),
       ),
     );
@@ -627,7 +634,7 @@ class _OutfitRowState extends State<_OutfitRow> {
   bool _hover = false;
 
   Widget _buildName() {
-    const TextStyle base = TextStyle(
+    final TextStyle base = TextStyle(
       fontSize: 14,
       letterSpacing: -0.2,
       color: IosColors.label,
@@ -653,7 +660,7 @@ class _OutfitRowState extends State<_OutfitRow> {
           TextSpan(text: widget.name.substring(0, idx)),
           TextSpan(
             text: widget.name.substring(idx, idx + q.length),
-            style: const TextStyle(
+            style: TextStyle(
               color: IosColors.blue,
               fontWeight: FontWeight.w700,
             ),
@@ -672,7 +679,7 @@ class _OutfitRowState extends State<_OutfitRow> {
 
     Color bg = Colors.transparent;
     if (_hover) {
-      bg = const Color(0x14FFFFFF);
+      bg = IosColors.overlay(0x14);
     } else if (selected) {
       bg = IosColors.blue.withOpacity(0.08);
     }
@@ -693,7 +700,7 @@ class _OutfitRowState extends State<_OutfitRow> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: AppMetrics.radius(10),
           ),
           child: Row(
             children: [
@@ -703,7 +710,7 @@ class _OutfitRowState extends State<_OutfitRow> {
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: IosColors.card,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: AppMetrics.radius(7),
                 ),
                 child: OutfitThumb(
                   outfit: widget.name,
@@ -772,7 +779,7 @@ class _PreviewCard extends StatelessWidget {
         Expanded(
           child: Center(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: AppMetrics.radius(14),
               child: Image.asset(
                 outfitImagePath(name),
                 fit: BoxFit.contain,
@@ -780,7 +787,7 @@ class _PreviewCard extends StatelessWidget {
                 errorBuilder: (context, error, stackTrace) => Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.hide_image_outlined,
                       size: 44,
                       color: IosColors.tertiaryLabel,
@@ -789,7 +796,7 @@ class _PreviewCard extends StatelessWidget {
                     Text(
                       noPreviewLabel,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
                         color: IosColors.secondaryLabel,
                       ),
@@ -806,7 +813,7 @@ class _PreviewCard extends StatelessWidget {
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             letterSpacing: -0.2,

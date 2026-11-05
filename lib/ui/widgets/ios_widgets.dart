@@ -8,7 +8,10 @@ import 'package:flutter/cupertino.dart'
         CupertinoSwitch,
         OverlayVisibilityMode;
 import 'package:flutter/material.dart';
+import '../theme/minimal_style.dart';
+import '../theme/app_metrics.dart';
 import '../theme/ios_theme.dart';
+import 'material_layout_widgets.dart';
 
 /// Botón de icono de barra de herramientas (como en macOS):
 /// sin borde, con un resaltado redondeado al pasar el cursor.
@@ -48,6 +51,10 @@ class _IosToolbarButtonState extends State<IosToolbarButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null && !widget.busy;
     final bg = widget.background;
+    final bool md = AppMetrics.md;
+    final bool u = AppMetrics.u;
+    final double boxW = u ? AppMetrics.iconButton : widget.width;
+    final double boxH = u ? AppMetrics.iconButton : widget.height;
 
     Color fill;
     if (bg != null) {
@@ -56,25 +63,35 @@ class _IosToolbarButtonState extends State<IosToolbarButton> {
           : (_hover && enabled ? Color.lerp(bg, Colors.white, 0.12)! : bg);
     } else {
       fill = _pressed && enabled
-          ? const Color(0x24FFFFFF)
-          : (_hover && enabled ? const Color(0x14FFFFFF) : Colors.transparent);
+          ? IosColors.overlay(0x24)
+          : (_hover && enabled ? IosColors.overlay(0x14) : Colors.transparent);
     }
 
     Widget box = AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
-      width: widget.width,
-      height: widget.height,
+      width: boxW,
+      height: boxH,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
+      decoration: MinimalStyle.on ? BoxDecoration(
         color: fill,
-        borderRadius: BorderRadius.circular(
-          bg != null ? widget.height / 2 : 8,
-        ),
-      ),
+        borderRadius: BorderRadius.circular(MinimalStyle.controlRadius),
+      ) : BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(
+                md ? AppMetrics.controlRadius : (bg != null ? widget.height / 2 : 8),
+              ),
+            ),
       child: Opacity(
         opacity: (enabled || widget.busy) ? 1 : 0.35,
-        child: widget.icon,
+        // Material: el icono también mide siempre lo mismo.
+        child: u
+            ? SizedBox(
+                width: AppMetrics.iconSize,
+                height: AppMetrics.iconSize,
+                child: FittedBox(fit: BoxFit.contain, child: widget.icon),
+              )
+            : widget.icon,
       ),
     );
 
@@ -108,14 +125,14 @@ class IosButton extends StatefulWidget {
     required this.label,
     this.icon,
     this.onPressed,
-    this.color = IosColors.blue,
+    this.color,
     this.height = 34,
   });
 
   final String label;
   final Widget? icon;
   final VoidCallback? onPressed;
-  final Color color;
+  final Color? color;
   final double height;
 
   @override
@@ -128,8 +145,17 @@ class _IosButtonState extends State<IosButton> {
 
   @override
   Widget build(BuildContext context) {
+    // Material: botón de tamaño único.
+    if (AppMetrics.md) {
+      return MdButton(
+        label: widget.label,
+        icon: widget.icon,
+        color: widget.color,
+        onPressed: widget.onPressed,
+      );
+    }
     final enabled = widget.onPressed != null;
-    Color fill = widget.color;
+    Color fill = widget.color ?? IosColors.blue;
     if (_pressed) {
       fill = Color.lerp(fill, Colors.black, 0.2)!;
     } else if (_hover) {
@@ -202,6 +228,14 @@ class IosSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppMetrics.md) {
+      return MdSearchField(
+        controller: controller,
+        placeholder: placeholder,
+        onChanged: onChanged,
+        autofocus: autofocus,
+      );
+    }
     return SizedBox(
       height: 34,
       child: CupertinoSearchTextField(
@@ -209,24 +243,24 @@ class IosSearchField extends StatelessWidget {
         placeholder: placeholder,
         onChanged: onChanged,
         autofocus: autofocus,
-        style: const TextStyle(
+        style: TextStyle(
           color: IosColors.label,
           fontSize: 13.5,
           letterSpacing: -0.1,
         ),
-        placeholderStyle: const TextStyle(
+        placeholderStyle: TextStyle(
           color: IosColors.secondaryLabel,
           fontSize: 13.5,
           letterSpacing: -0.1,
         ),
         backgroundColor: IosColors.fill,
         borderRadius: BorderRadius.circular(10),
-        prefixIcon: const Icon(
+        prefixIcon: Icon(
           Icons.search_rounded,
           size: 17,
           color: IosColors.secondaryLabel,
         ),
-        suffixIcon: const Icon(
+        suffixIcon: Icon(
           Icons.cancel_rounded,
           size: 16,
           color: IosColors.secondaryLabel,
@@ -254,10 +288,17 @@ class IosSegmented<T extends Object> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppMetrics.md) {
+      return MdSegmented<T>(
+        value: value,
+        children: children,
+        onChanged: onChanged,
+      );
+    }
     return CupertinoSlidingSegmentedControl<T>(
       groupValue: value,
       backgroundColor: IosColors.fill,
-      thumbColor: const Color(0xFF636366),
+      thumbColor: IosColors.gray,
       padding: const EdgeInsets.all(2),
       children: {
         for (final e in children.entries)
@@ -295,6 +336,45 @@ class _IosChipState extends State<IosChip> {
 
   @override
   Widget build(BuildContext context) {
+    if (AppMetrics.md) {
+      // Material: chip rectangular con contorno; seleccionado = tintado.
+      final bool sel = widget.selected;
+      
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            height: AppMetrics.chipHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: sel
+                  ? IosColors.blue.withOpacity(0.22)
+                  : (_hover ? IosColors.overlay(0x10) : Colors.transparent),
+              borderRadius: BorderRadius.circular(AppMetrics.smallRadius),
+              border: Border.all(
+                color: sel ? IosColors.blue : IosColors.overlay(0x38),
+                width: 1,
+              ),
+            ),
+            child: Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: sel ? FontWeight.w600 : FontWeight.w500,
+                color: sel ? IosColors.blue : IosColors.label,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final Color fill = widget.selected
         ? IosColors.blue
         : (_hover ? IosColors.chipHover : IosColors.chip);
@@ -319,7 +399,7 @@ class _IosChipState extends State<IosChip> {
               fontSize: 12.5,
               fontWeight: FontWeight.w500,
               letterSpacing: -0.1,
-              color: widget.selected ? Colors.white : const Color(0xCCEBEBF5),
+              color: widget.selected ? Colors.white : IosColors.label.withAlpha(0xCC),
             ),
           ),
         ),
@@ -341,11 +421,12 @@ PopupMenuItem<T> iosMenuItem<T>({
       ? IosColors.tertiaryLabel
       : (destructive ? IosColors.red : IosColors.label);
 
+  final bool md = AppMetrics.u;
   return PopupMenuItem<T>(
     value: value,
     enabled: enabled,
-    height: 34,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
+    height: md ? AppMetrics.controlHeight : 34,
+    padding: EdgeInsets.symmetric(horizontal: md ? 16 : 12),
     child: Row(
       children: [
         if (leading != null) ...[
@@ -357,11 +438,15 @@ PopupMenuItem<T> iosMenuItem<T>({
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, color: color, letterSpacing: -0.1),
+            style: TextStyle(
+              fontSize: md ? 14 : 13,
+              color: color,
+              letterSpacing: md ? 0 : -0.1,
+            ),
           ),
         ),
         if (selected)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 10),
             child: Icon(Icons.check_rounded, size: 16, color: IosColors.blue),
           ),
@@ -443,8 +528,8 @@ class IosGlass extends StatelessWidget {
     this.borderRadius = const BorderRadius.all(Radius.circular(14)),
     this.blur = 30,
     this.blurEnabled = true,
-    this.color = const Color(0xD92C2C2E),
-    this.borderColor = const Color(0x24FFFFFF),
+    this.color,
+    this.borderColor,
     this.shadow = false,
   });
 
@@ -456,17 +541,49 @@ class IosGlass extends StatelessWidget {
   /// Flutter reconstruiría todo el contenido y perdería su estado: scroll,
   /// animaciones...). Sirve para pausarlo mientras algo lo tapa por completo.
   final bool blurEnabled;
-  final Color color;
-  final Color borderColor;
+  final Color? color;
+  final Color? borderColor;
   final bool shadow;
 
   @override
   Widget build(BuildContext context) {
+    // Material: superficie sólida (sin desenfoque), con filo de 1 px y una
+    // sombra de elevación; el redondeo de las ventanas grandes se respeta.
+    if (AppMetrics.md) {
+      BorderRadiusGeometry br = MinimalStyle.on
+          ? BorderRadius.circular(MinimalStyle.dialogRadius) : borderRadius;
+      if (!MinimalStyle.on && br is BorderRadius && br.topLeft.x <= 16) {
+        br = AppMetrics.radius(br.topLeft.x);
+      }
+      
+      final Widget surface = DecoratedBox(
+        decoration: MinimalStyle.on ? BoxDecoration(color: color ?? IosColors.card, borderRadius: br, border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
+          color: color ?? IosColors.card,
+          borderRadius: br,
+          border: Border.all(
+            color: borderColor ?? IosColors.overlay(0x1F),
+            width: 1,
+          ),
+          boxShadow: shadow
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 28,
+                    offset: const Offset(0, 10),
+                  ),
+                ]
+              : null,
+        ),
+        child: ClipRRect(borderRadius: br, child: child),
+      );
+      return surface;
+    }
+
     final Widget panel = DecoratedBox(
-      decoration: BoxDecoration(
-        color: color,
+      decoration: MinimalStyle.on ? BoxDecoration(color: color ?? IosColors.card.withAlpha(0xD9), borderRadius: borderRadius, border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
+        color: color ?? IosColors.card.withAlpha(0xD9),
         borderRadius: borderRadius,
-        border: Border.all(color: borderColor, width: 0.8),
+        border: Border.all(color: borderColor ?? IosColors.overlay(0x24), width: 0.8),
       ),
       child: child,
     );
@@ -488,7 +605,7 @@ class IosGlass extends StatelessWidget {
 
     if (!shadow) return glass;
     return DecoratedBox(
-      decoration: BoxDecoration(
+      decoration: MinimalStyle.on ? BoxDecoration(color: Colors.black.withOpacity(0.45), borderRadius: borderRadius, border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
         borderRadius: borderRadius,
         boxShadow: [
           BoxShadow(
@@ -523,12 +640,14 @@ class IosGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool md = AppMetrics.md;
+    final bool u = AppMetrics.u;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (title != null)
           SizedBox(
-            height: 32,
+            height: u ? 40 : 32,
             child: Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Row(
@@ -539,10 +658,10 @@ class IosGroup extends StatelessWidget {
                       title!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12.5,
+                      style: TextStyle(
+                        fontSize: u ? 14 : 12.5,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: -0.1,
+                        letterSpacing: u ? 0 : -0.1,
                         color: IosColors.secondaryLabel,
                       ),
                     ),
@@ -553,12 +672,19 @@ class IosGroup extends StatelessWidget {
             ),
           ),
         Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: const Color(0x14FFFFFF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0x14FFFFFF), width: 0.5),
-          ),
+          padding: u ? const EdgeInsets.all(AppMetrics.cardPadding) : padding,
+          decoration: MinimalStyle.on ? BoxDecoration(color: md ? IosColors.card : IosColors.overlay(0x14), borderRadius: BorderRadius.circular(
+                    md ? AppMetrics.cardRadius : 12,
+                  ), border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
+                  color: md ? IosColors.card : IosColors.overlay(0x14),
+                  borderRadius: BorderRadius.circular(
+                    md ? AppMetrics.cardRadius : 12,
+                  ),
+                  border: Border.all(
+                    color: IosColors.overlay(md ? 0x1F : 0x14),
+                    width: md ? 1 : 0.5,
+                  ),
+                ),
           child: child,
         ),
       ],
@@ -577,7 +703,7 @@ class IosActionButton extends StatefulWidget {
     this.iconBuilder,
     this.onPressed,
     this.style = IosButtonStyle.tinted,
-    this.color = IosColors.blue,
+    this.color,
     this.height = 38,
   });
 
@@ -585,7 +711,7 @@ class IosActionButton extends StatefulWidget {
   final Widget Function(Color color)? iconBuilder;
   final VoidCallback? onPressed;
   final IosButtonStyle style;
-  final Color color;
+  final Color? color;
   final double height;
 
   @override
@@ -599,7 +725,7 @@ class _IosActionButtonState extends State<IosActionButton> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
-    final Color c = widget.color;
+    final Color c = widget.color ?? IosColors.blue;
 
     Color bg;
     Color fg;
@@ -616,7 +742,7 @@ class _IosActionButtonState extends State<IosActionButton> {
         break;
       case IosButtonStyle.gray:
         bg = _pressed
-            ? const Color(0x38FFFFFF)
+            ? IosColors.overlay(0x38)
             : (_hover ? IosColors.chipHover : IosColors.chip);
         fg = c;
         break;
@@ -642,12 +768,18 @@ class _IosActionButtonState extends State<IosActionButton> {
             opacity: enabled ? 1 : 0.4,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 120),
-              height: widget.height,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(10),
+              height: AppMetrics.u ? AppMetrics.controlHeight : widget.height,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppMetrics.u ? 20 : 12,
               ),
+              decoration: MinimalStyle.on ? BoxDecoration(color: bg, borderRadius: BorderRadius.circular(
+                        AppMetrics.md ? AppMetrics.controlRadius : 10,
+                      ), border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(
+                        AppMetrics.md ? AppMetrics.controlRadius : 10,
+                      ),
+                    ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
@@ -662,9 +794,9 @@ class _IosActionButtonState extends State<IosActionButton> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13.5,
+                        fontSize: AppMetrics.u ? 15 : 13.5,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: -0.1,
+                        letterSpacing: AppMetrics.u ? 0 : -0.1,
                         color: fg,
                       ),
                     ),
@@ -685,16 +817,21 @@ class IosTextButton extends StatefulWidget {
     super.key,
     required this.label,
     this.onPressed,
-    this.color = IosColors.blue,
+    this.color,
     this.fontSize = 13.5,
     this.bold = false,
+    this.compact = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
-  final Color color;
+  final Color? color;
   final double fontSize;
   final bool bold;
+
+  /// Solo para enlaces pequeños dentro de cabeceras de formulario: en Material
+  /// miden lo mismo que una etiqueta en lugar de lo que mide un botón.
+  final bool compact;
 
   @override
   State<IosTextButton> createState() => _IosTextButtonState();
@@ -722,24 +859,34 @@ class _IosTextButtonState extends State<IosTextButton> {
         onTap: widget.onPressed,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          alignment: AppMetrics.u ? Alignment.center : null,
+          height: AppMetrics.u
+              ? (widget.compact ? AppMetrics.chipHeight : AppMetrics.controlHeight)
+              : null,
+          padding: AppMetrics.u
+              ? const EdgeInsets.symmetric(horizontal: 14)
+              : const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: BoxDecoration(
             color: _pressed && enabled
-                ? const Color(0x24FFFFFF)
+                ? IosColors.overlay(0x24)
                 : (_hover && enabled
-                    ? const Color(0x14FFFFFF)
+                    ? IosColors.overlay(0x14)
                     : Colors.transparent),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(
+              AppMetrics.md ? AppMetrics.controlRadius : 8,
+            ),
           ),
           child: Text(
             widget.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: widget.fontSize,
-              fontWeight: widget.bold ? FontWeight.w600 : FontWeight.w500,
-              letterSpacing: -0.1,
-              color: enabled ? widget.color : IosColors.tertiaryLabel,
+              fontSize: AppMetrics.u ? (widget.compact ? 13 : 14) : widget.fontSize,
+              fontWeight: (widget.bold || AppMetrics.u)
+                  ? FontWeight.w600
+                  : FontWeight.w500,
+              letterSpacing: AppMetrics.u ? 0 : -0.1,
+              color: enabled ? (widget.color ?? IosColors.blue) : IosColors.tertiaryLabel,
             ),
           ),
         ),
@@ -780,18 +927,25 @@ class _IosCloseButtonState extends State<IosCloseButton> {
         onTap: widget.onPressed,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: 28,
-          height: 28,
+          width: AppMetrics.u ? AppMetrics.iconButton : 28,
+          height: AppMetrics.u ? AppMetrics.iconButton : 28,
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
+          decoration: MinimalStyle.on ? BoxDecoration(color: _pressed
+                ? IosColors.fill.withAlpha(0x66)
+                : (_hover ? IosColors.fill.withAlpha(0x52) : IosColors.fill), borderRadius: AppMetrics.md
+                ? BorderRadius.circular(AppMetrics.controlRadius)
+                : null, border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
+            shape: AppMetrics.md ? BoxShape.rectangle : BoxShape.circle,
+            borderRadius: AppMetrics.md
+                ? BorderRadius.circular(AppMetrics.controlRadius)
+                : null,
             color: _pressed
-                ? const Color(0x66767680)
-                : (_hover ? const Color(0x52767680) : const Color(0x3D767680)),
+                ? IosColors.fill.withAlpha(0x66)
+                : (_hover ? IosColors.fill.withAlpha(0x52) : IosColors.fill),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.close_rounded,
-            size: 16,
+            size: AppMetrics.u ? AppMetrics.iconSize : 16,
             color: IosColors.secondaryLabel,
           ),
         ),
@@ -820,42 +974,51 @@ class IosSwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.2,
-                  color: IosColors.label,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
+    final bool md = AppMetrics.md;
+    final bool u = AppMetrics.u;
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: u ? AppMetrics.tileMinHeight : 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Text(
-                  subtitle!,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    height: 1.3,
-                    color: IosColors.secondaryLabel,
+                  title,
+                  style: TextStyle(
+                    fontSize: u ? 15 : 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: u ? 0 : -0.2,
+                    color: IosColors.label,
                   ),
                 ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: u ? 13 : 12,
+                      height: 1.3,
+                      color: IosColors.secondaryLabel,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        CupertinoSwitch(
-          value: value,
-          activeColor: IosColors.green,
-          onChanged: onChanged,
-        ),
-      ],
+          const SizedBox(width: 12),
+          if (md)
+            MdSwitch(value: value, onChanged: onChanged)
+          else
+            CupertinoSwitch(
+              value: value,
+              activeColor: IosColors.green,
+              onChanged: onChanged,
+            ),
+        ],
+      ),
     );
   }
 }
@@ -897,13 +1060,24 @@ class _IosCheckRowState extends State<IosCheckRow> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          padding: EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: AppMetrics.u ? 0 : 9,
+          ),
+          constraints: BoxConstraints(
+            minHeight: AppMetrics.u ? AppMetrics.tileMinHeight : 0,
+          ),
           decoration: BoxDecoration(
-            color: _hover ? const Color(0x14FFFFFF) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            color: _hover ? IosColors.overlay(0x14) : Colors.transparent,
+            borderRadius: BorderRadius.circular(
+              AppMetrics.md ? AppMetrics.controlRadius : 8,
+            ),
           ),
           child: Row(
             children: [
+              if (AppMetrics.md)
+                MdCheckbox(selected: widget.selected)
+              else
               AnimatedContainer(
                 duration: const Duration(milliseconds: 140),
                 width: 20,
@@ -929,9 +1103,9 @@ class _IosCheckRowState extends State<IosCheckRow> {
                   widget.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    letterSpacing: -0.2,
+                  style: TextStyle(
+                    fontSize: AppMetrics.u ? 15 : 14,
+                    letterSpacing: AppMetrics.u ? 0 : -0.2,
                     color: IosColors.label,
                   ),
                 ),
@@ -946,13 +1120,32 @@ class _IosCheckRowState extends State<IosCheckRow> {
 
 /// Decoración de campo de texto estilo iOS (relleno gris, sin borde).
 InputDecoration iosInputDecoration({String? hint}) {
+  
+  if (AppMetrics.md) {
+    // Material: campo con contorno (mismo alto y redondeo en toda la app).
+    OutlineInputBorder border(Color c, double w) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppMetrics.controlRadius),
+          borderSide: BorderSide(color: c, width: w),
+        );
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: IosColors.tertiaryLabel, fontSize: 15),
+      filled: false,
+      isDense: true,
+      counterStyle: TextStyle(fontSize: 12, color: IosColors.secondaryLabel),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      border: border(IosColors.overlay(0x38), 1),
+      enabledBorder: border(IosColors.overlay(0x38), 1),
+      focusedBorder: border(IosColors.blue, 2),
+    );
+  }
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: IosColors.tertiaryLabel, fontSize: 14),
+    hintStyle: TextStyle(color: IosColors.tertiaryLabel, fontSize: 14),
     filled: true,
     fillColor: IosColors.fill,
     isDense: true,
-    counterStyle: const TextStyle(
+    counterStyle: TextStyle(
       fontSize: 11,
       color: IosColors.secondaryLabel,
     ),
@@ -967,7 +1160,7 @@ InputDecoration iosInputDecoration({String? hint}) {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: IosColors.blue, width: 1.5),
+      borderSide: BorderSide(color: IosColors.blue, width: 1.5),
     ),
   );
 }
@@ -1002,6 +1195,56 @@ class _IosDialogButtonState extends State<IosDialogButton> {
         ? IosColors.tertiaryLabel
         : (widget.destructive ? IosColors.red : IosColors.blue);
 
+    if (AppMetrics.md) {
+      // Material: botón de texto de tamaño único; la acción principal va
+      // tintada. Se coloca a la derecha del diálogo (ver IosDialogShell).
+      final Color bg = _pressed && enabled
+          ? color.withOpacity(0.26)
+          : (_hover && enabled
+              ? color.withOpacity(0.18)
+              : (widget.bold && enabled ? color.withOpacity(0.12) : Colors.transparent));
+      return MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() {
+          _hover = false;
+          _pressed = false;
+        }),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+          onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+          onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+          onTap: widget.onPressed,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            height: 46,
+            constraints: const BoxConstraints(minWidth: 72),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            alignment: Alignment.center,
+            decoration: MinimalStyle.on ? BoxDecoration(color: bg, borderRadius: BorderRadius.circular(
+                      AppMetrics.controlRadius,
+                    ), border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(
+                      AppMetrics.controlRadius,
+                    ),
+                  ),
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hover = true),
@@ -1020,9 +1263,9 @@ class _IosDialogButtonState extends State<IosDialogButton> {
           height: 46,
           alignment: Alignment.center,
           color: _pressed && enabled
-              ? const Color(0x24FFFFFF)
+              ? IosColors.overlay(0x24)
               : (_hover && enabled
-                  ? const Color(0x0FFFFFFF)
+                  ? IosColors.overlay(0x0F)
                   : Colors.transparent),
           child: Text(
             widget.label,
@@ -1066,6 +1309,66 @@ class IosDialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Material: ventana de tamaño único (mismo ancho y redondeo en todas),
+    // título a la izquierda y botones alineados a la derecha.
+    if (AppMetrics.md) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: AppMetrics.dialogWidthFor(width)),
+        child: IosGlass(
+          shadow: true,
+          borderRadius: BorderRadius.circular(AppMetrics.dialogRadius),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                        color: IosColors.label,
+                      ),
+                    ),
+                    if (message != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        message!,
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.3,
+                          color: IosColors.secondaryLabel,
+                        ),
+                      ),
+                    ],
+                    if (content != null) ...[
+                      const SizedBox(height: 14),
+                      content!,
+                    ],
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: actions,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: width),
       child: IosGlass(
@@ -1084,7 +1387,7 @@ class IosDialogShell extends StatelessWidget {
                   Text(
                     title,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.3,
@@ -1096,7 +1399,7 @@ class IosDialogShell extends StatelessWidget {
                     Text(
                       message!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         height: 1.3,
                         color: IosColors.secondaryLabel,
@@ -1110,7 +1413,7 @@ class IosDialogShell extends StatelessWidget {
                 ],
               ),
             ),
-            Container(height: 0.5, color: const Color(0x38FFFFFF)),
+            Container(height: 0.5, color: IosColors.overlay(0x38)),
             if (stacked)
               Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1118,7 +1421,7 @@ class IosDialogShell extends StatelessWidget {
                 children: [
                   for (int i = 0; i < actions.length; i++) ...[
                     if (i > 0)
-                      Container(height: 0.5, color: const Color(0x38FFFFFF)),
+                      Container(height: 0.5, color: IosColors.overlay(0x38)),
                     actions[i],
                   ],
                 ],
@@ -1130,7 +1433,7 @@ class IosDialogShell extends StatelessWidget {
                   children: [
                     for (int i = 0; i < actions.length; i++) ...[
                       if (i > 0)
-                        Container(width: 0.5, color: const Color(0x38FFFFFF)),
+                        Container(width: 0.5, color: IosColors.overlay(0x38)),
                       Expanded(child: actions[i]),
                     ],
                   ],
@@ -1153,8 +1456,8 @@ Future<T?> showIosDialog<T>({
     context: context,
     barrierDismissible: barrierDismissible,
     barrierLabel: 'dismiss',
-    barrierColor: const Color(0x66000000),
-    transitionDuration: const Duration(milliseconds: 180),
+    barrierColor: (AppMetrics.md ? const Color(0x80000000) : const Color(0x66000000)),
+    transitionDuration: Duration(milliseconds: AppMetrics.md ? 220 : 180),
     pageBuilder: (ctx, _, __) => SafeArea(
       child: Center(
         child: Material(
@@ -1175,7 +1478,10 @@ Future<T?> showIosDialog<T>({
       return FadeTransition(
         opacity: curved,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 1.08, end: 1.0).animate(curved),
+          scale: Tween<double>(
+            begin: AppMetrics.md ? 0.92 : 1.08,
+            end: 1.0,
+          ).animate(curved),
           child: child,
         ),
       );
@@ -1191,6 +1497,16 @@ class IosSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppMetrics.md) {
+      return SizedBox(
+        width: radius * 2,
+        height: radius * 2,
+        child: CircularProgressIndicator(
+          strokeWidth: radius >= 10 ? 3 : 2.5,
+          color: IosColors.blue,
+        ),
+      );
+    }
     return CupertinoActivityIndicator(
       radius: radius,
       color: IosColors.secondaryLabel,
@@ -1263,6 +1579,9 @@ class IosAdaptiveSegmented<T extends Object> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppMetrics.md) {
+      return MdTabs<T>(value: value, labels: labels, onChanged: onChanged);
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final double available = constraints.maxWidth;
@@ -1376,8 +1695,8 @@ class _IosPopupSelectorState<T extends Object>
   @override
   Widget build(BuildContext context) {
     final Color fill = _pressed
-        ? const Color(0x66767680)
-        : (_hover ? const Color(0x52767680) : IosColors.fill);
+        ? IosColors.fill.withAlpha(0x66)
+        : (_hover ? IosColors.fill.withAlpha(0x52) : IosColors.fill);
 
     return Builder(
       builder: (buttonContext) => MouseRegion(
@@ -1414,7 +1733,7 @@ class _IosPopupSelectorState<T extends Object>
                     widget.labels[widget.value] ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.1,
@@ -1423,7 +1742,7 @@ class _IosPopupSelectorState<T extends Object>
                   ),
                 ),
                 const SizedBox(width: 6),
-                const Icon(
+                Icon(
                   Icons.unfold_more_rounded,
                   size: 17,
                   color: IosColors.secondaryLabel,
@@ -1481,7 +1800,7 @@ class IosFormField extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          height: 26,
+          height: AppMetrics.u ? 32 : 26,
           child: Row(
             children: [
               Expanded(
@@ -1491,10 +1810,10 @@ class IosFormField extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
+                    style: TextStyle(
+                      fontSize: AppMetrics.u ? 13 : 12,
                       fontWeight: FontWeight.w500,
-                      letterSpacing: -0.1,
+                      letterSpacing: AppMetrics.u ? 0 : -0.1,
                       color: IosColors.secondaryLabel,
                     ),
                   ),
@@ -1504,6 +1823,7 @@ class IosFormField extends StatelessWidget {
                 IosTextButton(
                   label: resetLabel!,
                   fontSize: 12,
+                  compact: true,
                   onPressed: canReset ? onReset : null,
                 ),
             ],
@@ -1516,10 +1836,10 @@ class IosFormField extends StatelessWidget {
           maxLines: maxLines,
           maxLength: maxLength,
           cursorColor: IosColors.blue,
-          style: const TextStyle(
-            fontSize: 14,
+          style: TextStyle(
+            fontSize: AppMetrics.u ? 15 : 14,
             height: 1.35,
-            letterSpacing: -0.15,
+            letterSpacing: AppMetrics.u ? 0 : -0.15,
             color: IosColors.label,
           ),
           decoration: iosInputDecoration(hint: hint),

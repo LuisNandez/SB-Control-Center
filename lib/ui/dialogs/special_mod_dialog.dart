@@ -3,6 +3,7 @@ import '../../services/special_mods_handler.dart';
 import '../../l10n/app_localizations.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/ios_widgets.dart';
+import '../theme/app_metrics.dart';
 
 class SpecialModSelectionDialog extends StatefulWidget {
   final SpecialModData modData;
@@ -63,8 +64,8 @@ class _SpecialModSelectionDialogState extends State<SpecialModSelectionDialog> {
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: const Color(0x14FFFFFF),
-                borderRadius: BorderRadius.circular(10),
+                color: IosColors.overlay(0x14),
+                borderRadius: AppMetrics.radius(10),
               ),
               child: ListView.builder(
                 shrinkWrap: true,
@@ -87,7 +88,7 @@ class _SpecialModSelectionDialogState extends State<SpecialModSelectionDialog> {
               child: Text(
                 l10n.snackBarSpecialModNoSelection,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12.5, color: IosColors.red),
+                style: TextStyle(fontSize: 12.5, color: IosColors.red),
               ),
             ),
         ],

@@ -32,10 +32,14 @@ import 'utils/version_utils.dart';
 import 'services/nexus_api_service.dart';
 import 'services/endorse_info_store.dart';
 import 'services/file_manager_service.dart';
+import 'services/cover_service.dart';
 import 'services/game_locator_service.dart';
+import 'services/gpu_preference_service.dart';
+import 'services/eco_mode_service.dart';
 import 'ui/widgets/mod_grid_card.dart';
 import 'ui/widgets/mod_list_tile.dart';
 import 'ui/widgets/mod_details_panel.dart';
+import 'ui/widgets/mod_details_route.dart';
 import 'ui/widgets/image_viewer.dart';
 import 'utils/text_utils.dart';
 import 'ui/dialogs/edit_dialogs.dart';
@@ -68,6 +72,10 @@ import 'services/download_manager.dart';
 import 'ui/widgets/download_pill_overlay.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'ui/theme/ios_theme.dart';
+import 'ui/theme/app_themes.dart';
+import 'ui/theme/app_layout.dart';
+import 'ui/theme/minimal_style.dart';
+import 'ui/widgets/material_layout_widgets.dart';
 import 'ui/widgets/ios_widgets.dart';
 import 'ui/widgets/ios_motion.dart' show IosMotion;
 import 'ui/widgets/smooth_scroll.dart';
@@ -78,6 +86,9 @@ import 'services/game_repair_service.dart';
 import 'ui/dialogs/repair_game_dialog.dart';
 import 'services/outfit_detector.dart';
 import 'services/hd_atool_audio_service.dart';
+import 'ui/theme/app_metrics.dart';
+import 'ui/widgets/app_title_bar.dart';
+import 'ui/widgets/eco_mode_layer.dart';
 
 final StreamController<String> multiInstanceLinkStream = StreamController<String>.broadcast();
 
@@ -117,18 +128,54 @@ void main(List<String> args) async {
     size: Size(1100, 700),
     center: true,
     title: 'SB Control Center',
+    titleBarStyle: TitleBarStyle.hidden,
+    windowButtonVisibility: false,
   );
 
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
+  // Aplica tamaño/posición con la ventana aún oculta (sin callback = no la muestra).
+  await windowManager.waitUntilReadyToShow(windowOptions);
+
+  // Tema elegido por el usuario: se lee ANTES de abrir la ventana para que la
+  // app arranque ya con sus colores (sin parpadeo del tema por defecto).
+  final startupPrefs = await SharedPreferences.getInstance();
+  final AppThemeId startupTheme =
+      AppThemes.parse(startupPrefs.getString(AppPrefs.themeId));
+
+  // Opción "Usar la tarjeta gráfica": si está activada, comprueba en segundo
+  // plano que Windows sigue teniendo la preferencia de GPU para este .exe.
+  unawaited(GpuPreferenceService.syncOnStartup(startupPrefs));
+
+  // Igual con el diseño de la interfaz (Cristal / Material / Plano).
+  final AppLayoutId startupLayout =
+      AppLayouts.parse(startupPrefs.getString(AppPrefs.layoutId));
+
+  // Botones de la ventana y barra fusionada (preferencias guardadas).
+  await WindowChrome.init(startupPrefs);
+
+  runApp(ModInstallerApp(
+    initialTheme: startupTheme,
+    initialLayout: startupLayout,
+  ));
+
+  // Mostrar SOLO cuando Flutter ya pintó el primer frame con el tamaño final.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
     await windowManager.show();
     await windowManager.focus();
   });
-
-  runApp(const ModInstallerApp());
 }
 
 class ModInstallerApp extends StatefulWidget {
-  const ModInstallerApp({super.key});
+  const ModInstallerApp({
+    super.key,
+    this.initialTheme = AppThemes.defaultId,
+    this.initialLayout = AppLayouts.defaultId,
+  });
+
+  /// Tema con el que arranca la app (el guardado en preferencias).
+  final AppThemeId initialTheme;
+
+  /// Diseño con el que arranca la app (el guardado en preferencias).
+  final AppLayoutId initialLayout;
 
   @override
   State<ModInstallerApp> createState() => _ModInstallerAppState();
@@ -138,15 +185,126 @@ class ModInstallerApp extends StatefulWidget {
         .findAncestorStateOfType<_ModInstallerAppState>();
     state?.setLocale(newLocale);
   }
+
+  /// Cambia el tema de colores de TODA la app al instante y lo guarda.
+  static void setTheme(BuildContext context, AppThemeId id) {
+    context.findAncestorStateOfType<_ModInstallerAppState>()?.setTheme(id);
+  }
+
+  /// Cambia el diseño (iOS / Material) de TODA la app al instante y lo guarda.
+  static void setLayout(BuildContext context, AppLayoutId id) {
+    context.findAncestorStateOfType<_ModInstallerAppState>()?.setLayout(id);
+  }
+
+  /// Diseño elegido actualmente.
+  static AppLayoutId layoutOf(BuildContext context) {
+    return context
+            .findAncestorStateOfType<_ModInstallerAppState>()
+            ?._layoutId ??
+        AppLayouts.defaultId;
+  }
+
+  /// Tema elegido actualmente (puede ser [AppThemeId.system]).
+  static AppThemeId themeOf(BuildContext context) {
+    return context
+            .findAncestorStateOfType<_ModInstallerAppState>()
+            ?._themeId ??
+        AppThemes.defaultId;
+  }
 }
 
-class _ModInstallerAppState extends State<ModInstallerApp> {
+class _ModInstallerAppState extends State<ModInstallerApp>
+    with WidgetsBindingObserver {
   Locale? _locale;
+  late AppThemeId _themeId;
+  late AppLayoutId _layoutId;
+  late AppPalette _palette;
 
   @override
   void initState() {
     super.initState();
+    _themeId = widget.initialTheme;
+    _layoutId = widget.initialLayout;
+    _palette = _resolvePalette();
+    IosColors.apply(_palette);
+    AppLayouts.apply(_layoutId);
+    WidgetsBinding.instance.addObserver(this);
+    WindowChrome.revision.addListener(_onChromeChanged);
     _loadLocale();
+  }
+
+  @override
+  void dispose() {
+    WindowChrome.revision.removeListener(_onChromeChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Cambió una opción de la barra de la ventana (botones / fusionar):
+  /// reconstruye TODA la interfaz, igual que un cambio de tema.
+  void _onChromeChanged() {
+    void markDirty(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(markDirty);
+    }
+
+    if (mounted) context.visitChildElements(markDirty);
+  }
+
+  AppPalette _resolvePalette() => AppThemes.resolve(
+        _themeId,
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      );
+
+  /// Con el tema "Automático", sigue los cambios claro/oscuro del sistema.
+  @override
+  void didChangePlatformBrightness() {
+    if (_themeId == AppThemeId.system) _refreshPalette();
+  }
+
+  Future<void> setTheme(AppThemeId id) async {
+    if (id == _themeId) return;
+    _themeId = id;
+    _refreshPalette();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppPrefs.themeId, id.name);
+  }
+
+  /// Cambia el diseño y reconstruye TODA la interfaz (igual que un cambio de
+  /// tema: los widgets leen [AppLayouts], no Theme.of) conservando el estado.
+  Future<void> setLayout(AppLayoutId id) async {
+    if (id == _layoutId) return;
+    _layoutId = id;
+    AppLayouts.apply(id);
+
+    void markDirty(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(markDirty);
+    }
+
+    if (mounted) context.visitChildElements(markDirty);
+    setState(() {});
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppPrefs.layoutId, id.name);
+  }
+
+  /// Activa la paleta que corresponde al tema elegido y reconstruye TODA la
+  /// interfaz. Los colores se leen de [IosColors] (no de Theme.of), así que
+  /// además del MaterialApp hay que marcar todos los elementos como sucios:
+  /// es lo mismo que hace Flutter en un hot reload y conserva el estado
+  /// (navegación, scroll, ajustes abiertos...).
+  void _refreshPalette() {
+    final AppPalette next = _resolvePalette();
+    if (identical(next, _palette)) return;
+    IosColors.apply(next);
+
+    void markDirty(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(markDirty);
+    }
+
+    if (mounted) context.visitChildElements(markDirty);
+    setState(() => _palette = next);
   }
 
   void _loadLocale() async {
@@ -170,10 +328,15 @@ class _ModInstallerAppState extends State<ModInstallerApp> {
     return MaterialApp(
       title: 'SB Control Center',
       debugShowCheckedModeBanner: false,
-      theme: IosTheme.dark(),
+      theme: IosTheme.build(_palette),
+      // Sin animación de tema: los colores propios (IosColors) cambian de golpe,
+      // así que el ThemeData de Material tiene que cambiar a la vez.
+      themeAnimationDuration: Duration.zero,
       locale: _locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) =>
+          AppWindowFrame(child: EcoModeLayer(child: child!)),
       home: const ModInstallerHomePage(),
     );
   }
@@ -210,6 +373,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   bool _isStoppingGame = false;
   bool _gameCheckInFlight = false;
   Timer? _gameWatcher;
+  Duration _gameWatchInterval = const Duration(seconds: 3);
+  bool _isSelfUpdating = false; // autoactualización en curso (no entrar en modo ahorro)
 
   List<ModInfo> _allMods = [];
 
@@ -304,6 +469,10 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   void initState() {
     super.initState();
     _startGameWatcher();
+    // Modo ahorro con el juego abierto: se reevalúa al cambiar las descargas y
+    // al volver a enfocar la ventana (sin esperar al siguiente sondeo).
+    DownloadManager.instance.addListener(_evaluateEcoMode);
+    WindowChrome.focused.addListener(_onWindowFocusForEco);
     
     // Esperamos a que todo se inicialice (incluyendo la carga de la API Key)
     _initialize().then((_) {
@@ -335,6 +504,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     _gridScrollController.dispose();
     _listScrollController.dispose();
     _gameWatcher?.cancel();
+    DownloadManager.instance.removeListener(_evaluateEcoMode);
+    WindowChrome.focused.removeListener(_onWindowFocusForEco);
     _hoverTimer?.cancel();
     _previewOverlay?.remove();
     try {
@@ -540,9 +711,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         backgroundColor: IosColors.background,
         barrierColor: const Color(0x66000000),
         constraints: const BoxConstraints(maxWidth: 640),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-          side: BorderSide(color: Color(0x1FFFFFFF), width: 0.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppMetrics.sheetRadius(14),
+          side: BorderSide(
+            color: IosColors.overlay(0x1F),
+            width: AppMetrics.hairline,
+          ),
         ),
         enableDrag: false,
         builder: (context) {
@@ -1816,13 +1990,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0x14FFFFFF),
-                borderRadius: BorderRadius.circular(10),
+                color: IosColors.overlay(0x14),
+                borderRadius: AppMetrics.radius(10),
               ),
               child: SingleChildScrollView(
                 child: SelectableText(
                   summary.toString(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12.5,
                     height: 1.4,
                     color: IosColors.label,
@@ -1962,14 +2136,14 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0x14FFFFFF),
-              borderRadius: BorderRadius.circular(10),
+              color: IosColors.overlay(0x14),
+              borderRadius: AppMetrics.radius(10),
             ),
             child: SingleChildScrollView(
               // SelectableText.rich para los TextSpans coloreados
               child: SelectableText.rich(
                 TextSpan(
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: IosColors.label,
                     fontFamily: 'Consolas', // monoespaciada, mejor para logs
                     fontSize: 12,
@@ -2860,13 +3034,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     required List<String> outfits,
     required List<ModInfo> conflicting,
   }) {
-    const bold = TextStyle(
+    final bold = TextStyle(
       fontSize: 13,
       height: 1.4,
       fontWeight: FontWeight.w600,
       color: IosColors.label,
     );
-    const link = TextStyle(
+    final link = TextStyle(
       fontSize: 13,
       height: 1.4,
       fontWeight: FontWeight.w600,
@@ -2931,7 +3105,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         content: RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               height: 1.4,
               color: IosColors.secondaryLabel,
@@ -5254,8 +5428,16 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           onTestSelfUpdate: _testSelfUpdate,
           onCheckAppUpdate: () => _checkForAppUpdate(manual: true),
           onShowChangelog: _showChangelogHistory,
+          onGetSkippedAppVersion: _getSkippedAppVersion,
+          onClearSkippedAppVersion: _clearSkippedAppVersion,
           isDeveloperModeEnabled: _developerModeEnabled,
           initialShowModTypeTags: _showModTypeTags,
+          initialThemeId: ModInstallerApp.themeOf(context),
+          onThemeChanged: (AppThemeId id) =>
+              ModInstallerApp.setTheme(context, id),
+          initialLayoutId: ModInstallerApp.layoutOf(context),
+          onLayoutChanged: (AppLayoutId id) =>
+              ModInstallerApp.setLayout(context, id),
           onShowModTypeTagsChanged: (newValue) async {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool(AppPrefs.showModTypeTags, newValue);
@@ -5502,10 +5684,51 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   void _startGameWatcher() {
     if (!Platform.isWindows) return;
     _refreshGameRunning();
-    _gameWatcher = Timer.periodic(
-      const Duration(seconds: 3),
-      (_) => _refreshGameRunning(),
+    _scheduleGameWatcher(const Duration(seconds: 3));
+  }
+
+  /// (Re)programa el vigilante del juego. En modo ahorro consulta con menos
+  /// frecuencia para gastar lo mínimo.
+  void _scheduleGameWatcher(Duration every) {
+    if (_gameWatcher != null && _gameWatchInterval == every) return;
+    _gameWatchInterval = every;
+    _gameWatcher?.cancel();
+    _gameWatcher = Timer.periodic(every, (_) => _refreshGameRunning());
+  }
+
+  /// La app está ocupada con algo que no debe interrumpirse: reparar o lanzar el
+  /// juego, cargar/instalar mods, descargas, autoactualización o cualquier
+  /// ventana, diálogo o página abierta encima de la principal.
+  bool get _ecoBusy {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return _isLaunchingGame ||
+        _isStoppingGame ||
+        _isLoading ||
+        _isExtracting ||
+        _isInstalling ||
+        _installPanelOpen ||
+        _isProcessingQueue ||
+        _isSelfUpdating ||
+        DownloadManager.instance.hasActiveDownloads ||
+        !(route?.isCurrent ?? true);
+  }
+
+  /// Entra o sale del modo ahorro según el estado del juego y de la app.
+  void _evaluateEcoMode() {
+    if (!mounted || !Platform.isWindows) return;
+    EcoModeService.instance.evaluate(
+      gameRunning: _isGameRunning,
+      busy: _ecoBusy,
     );
+    _scheduleGameWatcher(
+      EcoModeService.instance.isActive
+          ? const Duration(seconds: 10)
+          : const Duration(seconds: 3),
+    );
+  }
+
+  void _onWindowFocusForEco() {
+    if (WindowChrome.focused.value) _refreshGameRunning();
   }
 
   Future<void> _refreshGameRunning() async {
@@ -5518,6 +5741,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       if (mounted && running != _isGameRunning) {
         setState(() => _isGameRunning = running);
       }
+      _evaluateEcoMode();
     } finally {
       _gameCheckInFlight = false;
     }
@@ -5937,7 +6161,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         content: RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               height: 1.4,
               color: IosColors.secondaryLabel,
@@ -5961,7 +6185,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                   onHover: (event) => _cursorPosition = event.position,
                   child: Text(
                     outfitName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
                       fontWeight: FontWeight.w600,
@@ -5980,7 +6204,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                     onTap: () => _showDetailsPage(conflictingMod),
                     child: Text(
                       modName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         height: 1.4,
                         fontWeight: FontWeight.w600,
@@ -6263,31 +6487,44 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     final cnsIsIgnored = _ignoredUpdates.contains(cnsUpdateIdentifier);
     final hasEnabledMods = _allMods.any((mod) => mod.isEnabled);
     final hasDisabledMods = _allMods.any((mod) => !mod.isEnabled);
+    final bool md = AppLayouts.isMaterial;
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: IosColors.bar,
         elevation: 0,
         scrolledUnderElevation: 0,
+        shadowColor: null,
         surfaceTintColor: Colors.transparent,
-        toolbarHeight: 52,
+        toolbarHeight: WindowChrome.barHeight,
         centerTitle: false,
-        titleSpacing: 16,
-        shape: const Border(
-          bottom: BorderSide(color: IosColors.separator, width: 0.5),
-        ),
+        // Barra fusionada: la propia barra de herramientas arrastra la ventana
+        // y los botones de la ventana flotan encima (ver AppWindowFrame).
+        flexibleSpace:
+            WindowChrome.merged.value ? const WindowDragArea() : null,
+        titleSpacing: WindowChrome.merged.value ? 0 : 16,
+        shape: Border(
+                bottom: BorderSide(color: IosColors.separator, width: 0.5),
+              ),
         title: Row(
           children: [
+            // Fusionada: sin nombre de la app; deja sitio al semáforo si va a
+            // la izquierda.
+            if (WindowChrome.merged.value)
+              SizedBox(
+                width: WindowChrome.leftInset > 0 ? WindowChrome.leftInset : 16,
+              ),
+            if (!WindowChrome.merged.value)
             Flexible(
               child: Text(
                 _cnsVersion != null
                     ? l10n.appTitleWithVersion(_cnsVersion!)
                     : l10n.appTitleNoCns,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+                style: TextStyle(
+                  fontSize: AppMetrics.u ? 22 : 15,
+                  fontWeight: AppMetrics.u ? FontWeight.w400 : FontWeight.w600,
+                  letterSpacing: AppMetrics.u ? 0 : -0.2,
                   color: IosColors.label,
                 ),
               ),
@@ -6296,7 +6533,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
               Padding(
                 padding: const EdgeInsets.only(left: 8.0),
                 child: IosToolbarButton(
-                  icon: const HugeIcon(
+                  icon: HugeIcon(
                     icon: HugeIcons.strokeRoundedNotification01,
                     color: IosColors.yellow,
                     size: 20.0,
@@ -6321,7 +6558,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           // mientras está en ejecución (al pulsarla lo cierra).
           IosToolbarButton(
             width: 44,
-            height: 28,
+            height: 28, // (con Material mide igual que los demás botones de icono)
             background: _isGameRunning ? IosColors.red : IosColors.green,
             // 'busy' ignora los clics sin atenuar el botón, para que se vea el spinner.
             busy: _isLaunchingGame || _isStoppingGame,
@@ -6337,11 +6574,21 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                 ),
               ),
               child: (_isLaunchingGame || _isStoppingGame)
-                  ? const CupertinoActivityIndicator(
-                      key: ValueKey('game-spinner'),
-                      radius: 8,
-                      color: Colors.white,
-                    )
+                  ? (AppLayouts.isMaterial
+                      ? const SizedBox(
+                          key: ValueKey('game-spinner'),
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const CupertinoActivityIndicator(
+                          key: ValueKey('game-spinner'),
+                          radius: 8,
+                          color: Colors.white,
+                        ))
                   : (_isGameRunning
                       ? const Icon(
                           Icons.stop_rounded,
@@ -6366,8 +6613,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           const SizedBox(width: 8),
           IosToolbarButton(
             icon: _isCheckingForUpdates
-                ? const CupertinoActivityIndicator(radius: 8)
-                : const HugeIcon(icon: HugeIcons.strokeRoundedWifiSync, color: IosColors.icon, size: 20.0),
+                ? const IosSpinner(radius: 8)
+                : HugeIcon(icon: HugeIcons.strokeRoundedWifiSync, color: IosColors.icon, size: 20.0),
             tooltip: l10n.checkForUpdates,
             onPressed: _isLoading || _isCheckingForUpdates
                 ? null
@@ -6376,11 +6623,14 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           if (_apiKey != null && _apiKey!.isNotEmpty)
             _buildUserProfileMenu(),
           IosToolbarButton(
-            icon: const HugeIcon(icon: HugeIcons.strokeRoundedSetting07, color: IosColors.icon, size: 20.0),
+            icon: HugeIcon(icon: HugeIcons.strokeRoundedSetting07, color: IosColors.icon, size: 20.0),
             tooltip: l10n.settings,
             onPressed: () => _openSettings(),
           ),
-          const SizedBox(width: 10),
+          // Fusionada con botones a la derecha: deja libre su sitio.
+          SizedBox(
+            width: WindowChrome.rightInset > 0 ? WindowChrome.rightInset : 10,
+          ),
         ],
       ),
 
@@ -6403,7 +6653,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
             child: Stack(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: EdgeInsets.all(AppLayouts.isMinimal && MediaQuery.sizeOf(context).width >= 1000 ? 24 : 16),
                   child: _finalModsPath == null && !_isLoading
                       ? _buildPathSelectionScreen(l10n)
                       : Column(
@@ -6431,8 +6681,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                                     child: Text(
                                       _metadataUpdateStatus,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
+                                      style: TextStyle(
+                                        color: IosColors.secondaryLabel,
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -6453,8 +6703,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                                     child: Text(
                                       l10n.statusCheckingUpdates,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
+                                      style: TextStyle(
+                                        color: IosColors.secondaryLabel,
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -6491,13 +6741,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                         color: IosColors.blue,
                         width: 2,
                       ),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: AppMetrics.radius(14),
                     ),
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const HugeIcon(
+                          HugeIcon(
                             icon: HugeIcons.strokeRoundedArchiveArrowDown,
                             size: 80,
                             color: IosColors.blue,
@@ -6748,43 +6998,75 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       ModTypeFilter.splash: l10n.modTypeSplash,
     };
 
+    final bool md = AppLayouts.isMaterial;
+
+    Future<void> setViewMode(ModListViewMode newMode) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(AppPrefs.viewMode, newMode.index);
+      setState(() => _viewMode = newMode);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            IosButton(
-              icon: const HugeIcon(icon: HugeIcons.strokeRoundedAddCircle, color: Colors.white, size: 18.0),
-              label: l10n.installNewMod,
-              onPressed: _showInstallationPanel,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: IosSearchField(
-                controller: _searchController,
-                placeholder: l10n.searchMods,
+            if (md)
+              MdButton(
+                icon: HugeIcon(icon: HugeIcons.strokeRoundedAddCircle, color: AppLayouts.isMinimal ? MinimalStyle.foregroundFor(IosColors.blue) : Colors.white, size: 18.0),
+                label: l10n.installNewMod,
+                onPressed: _showInstallationPanel,
+              )
+            else
+              IosButton(
+                icon: const HugeIcon(icon: HugeIcons.strokeRoundedAddCircle, color: Colors.white, size: 18.0),
+                label: l10n.installNewMod,
+                onPressed: _showInstallationPanel,
               ),
+            SizedBox(width: AppMetrics.u ? 12 : 10),
+            Expanded(
+              child: md
+                  ? MdSearchField(
+                      controller: _searchController,
+                      placeholder: l10n.searchMods,
+                    )
+                  : IosSearchField(
+                      controller: _searchController,
+                      placeholder: l10n.searchMods,
+                    ),
             ),
-            const SizedBox(width: 10),
-            IosSegmented<ModListViewMode>(
-              value: _viewMode,
-              onChanged: (newMode) async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setInt(AppPrefs.viewMode, newMode.index);
-                setState(() => _viewMode = newMode);
-              },
-              children: {
-                ModListViewMode.grid: Tooltip(
-                  message: l10n.viewTypeGrid,
-                  child: const HugeIcon(icon: HugeIcons.strokeRoundedLayoutGrid, color: IosColors.label, size: 17.0),
-                ),
-                ModListViewMode.list: Tooltip(
-                  message: l10n.viewTypeList,
-                  child: const HugeIcon(icon: HugeIcons.strokeRoundedLeftToRightListBullet, color: IosColors.label, size: 17.0),
-                ),
-              },
-            ),
+            SizedBox(width: AppMetrics.u ? 12 : 10),
+            if (md)
+              MdIconSegmented<ModListViewMode>(
+                value: _viewMode,
+                onChanged: setViewMode,
+                items: {
+                  ModListViewMode.grid: MdSegmentItem(
+                    icon: HugeIcons.strokeRoundedLayoutGrid,
+                    tooltip: l10n.viewTypeGrid,
+                  ),
+                  ModListViewMode.list: MdSegmentItem(
+                    icon: HugeIcons.strokeRoundedLeftToRightListBullet,
+                    tooltip: l10n.viewTypeList,
+                  ),
+                },
+              )
+            else
+              IosSegmented<ModListViewMode>(
+                value: _viewMode,
+                onChanged: setViewMode,
+                children: {
+                  ModListViewMode.grid: Tooltip(
+                    message: l10n.viewTypeGrid,
+                    child: HugeIcon(icon: HugeIcons.strokeRoundedLayoutGrid, color: IosColors.label, size: 17.0),
+                  ),
+                  ModListViewMode.list: Tooltip(
+                    message: l10n.viewTypeList,
+                    child: HugeIcon(icon: HugeIcons.strokeRoundedLeftToRightListBullet, color: IosColors.label, size: 17.0),
+                  ),
+                },
+              ),
             const SizedBox(width: 6),
             IosMenuButton<ModFilter>(
               tooltip: l10n.filterBy,
@@ -6808,7 +7090,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
             ),
             IosMenuButton<ModSort>(
               tooltip: l10n.sortBy,
-              icon: const HugeIcon(icon: HugeIcons.strokeRoundedSorting01, color: IosColors.icon, size: 20.0),
+              icon: HugeIcon(icon: HugeIcons.strokeRoundedSorting01, color: IosColors.icon, size: 20.0),
               onSelected: (ModSort result) async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setInt(AppPrefs.sortMode, result.index);
@@ -6820,7 +7102,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
               ],
             ),
             IosToolbarButton(
-              icon: const HugeIcon(icon: HugeIcons.strokeRoundedFolderSymlink, color: IosColors.icon, size: 20.0),
+              icon: HugeIcon(icon: HugeIcons.strokeRoundedFolderSymlink, color: IosColors.icon, size: 20.0),
               tooltip: l10n.openModsFolder,
               onPressed: _isLoading
                   ? null
@@ -6831,13 +7113,37 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                     },
             ),
             IosToolbarButton(
-              icon: const HugeIcon(icon: HugeIcons.strokeRoundedRefresh01, color: IosColors.icon, size: 20.0),
+              icon: HugeIcon(icon: HugeIcons.strokeRoundedRefresh01, color: IosColors.icon, size: 20.0),
               tooltip: l10n.refreshList,
               onPressed: _isLoading ? null : () => _loadAllMods(clearHighlight: true),
             ),
+            // Diseño Material: acciones masivas como botones sueltos de colores.
+            if (md && !AppLayouts.isMinimal) ...[
+              IosToolbarButton(
+                icon: HugeIcon(icon: HugeIcons.strokeRoundedPower, color: IosColors.green, size: 20.0),
+                tooltip: l10n.enableAllModsTooltip,
+                onPressed: (_isLoading || !hasDisabledModsInView)
+                    ? null
+                    : () => _enableAllMods(mods),
+              ),
+              IosToolbarButton(
+                icon: HugeIcon(icon: HugeIcons.strokeRoundedPowerOff, color: IosColors.orange, size: 20.0),
+                tooltip: l10n.disableAllModsTooltip,
+                onPressed: (_isLoading || !hasEnabledModsInView)
+                    ? null
+                    : () => _disableAllMods(mods),
+              ),
+              IosToolbarButton(
+                icon: HugeIcon(icon: HugeIcons.strokeRoundedDelete04, color: IosColors.red, size: 20.0),
+                tooltip: l10n.deleteAllModsTooltip,
+                onPressed: (_isLoading || !hasDisabledModsInView)
+                    ? null
+                    : () => _deleteDisabledMods(mods),
+              ),
+            ] else
             // Acciones masivas agrupadas en un solo menú (⋯)
             IosMenuButton<String>(
-              icon: const Icon(Icons.more_horiz_rounded, color: IosColors.icon, size: 22),
+              icon: Icon(Icons.more_horiz_rounded, color: IosColors.icon, size: 22),
               onSelected: (action) {
                 switch (action) {
                   case 'enable_all':
@@ -6856,13 +7162,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                   value: 'enable_all',
                   label: l10n.enableAllModsTooltip,
                   enabled: !_isLoading && hasDisabledModsInView,
-                  leading: const HugeIcon(icon: HugeIcons.strokeRoundedPower, color: IosColors.green, size: 16.0),
+                  leading: HugeIcon(icon: HugeIcons.strokeRoundedPower, color: IosColors.green, size: 16.0),
                 ),
                 iosMenuItem<String>(
                   value: 'disable_all',
                   label: l10n.disableAllModsTooltip,
                   enabled: !_isLoading && hasEnabledModsInView,
-                  leading: const HugeIcon(icon: HugeIcons.strokeRoundedPowerOff, color: IosColors.orange, size: 16.0),
+                  leading: HugeIcon(icon: HugeIcons.strokeRoundedPowerOff, color: IosColors.orange, size: 16.0),
                 ),
                 const PopupMenuDivider(height: 8),
                 iosMenuItem<String>(
@@ -6870,25 +7176,36 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                   label: l10n.deleteAllModsTooltip,
                   destructive: true,
                   enabled: !_isLoading && hasDisabledModsInView,
-                  leading: const HugeIcon(icon: HugeIcons.strokeRoundedDelete04, color: IosColors.red, size: 16.0),
+                  leading: HugeIcon(icon: HugeIcons.strokeRoundedDelete04, color: IosColors.red, size: 16.0),
                 ),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: AppMetrics.u ? 16 : 12),
         // Filtros por tipo: control segmentado centrado y adaptable. Reduce su
         // tamaño al estrecharse la ventana y, si no cabe, pasa a ser un
         // selector desplegable.
-        IosAdaptiveSegmented<ModTypeFilter>(
-          value: _currentModTypeFilter,
-          labels: typeLabels,
-          onChanged: (newFilter) async {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setInt(AppPrefs.modTypeFilterMode, newFilter.index);
-            setState(() => _currentModTypeFilter = newFilter);
-          },
-        ),
+        if (md)
+          MdTabs<ModTypeFilter>(
+            value: _currentModTypeFilter,
+            labels: typeLabels,
+            onChanged: (newFilter) async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setInt(AppPrefs.modTypeFilterMode, newFilter.index);
+              setState(() => _currentModTypeFilter = newFilter);
+            },
+          )
+        else
+          IosAdaptiveSegmented<ModTypeFilter>(
+            value: _currentModTypeFilter,
+            labels: typeLabels,
+            onChanged: (newFilter) async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setInt(AppPrefs.modTypeFilterMode, newFilter.index);
+              setState(() => _currentModTypeFilter = newFilter);
+            },
+          ),
         const SizedBox(height: 12),
         Expanded(
           child: mods.isEmpty
@@ -6896,11 +7213,11 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.inventory_2_outlined, size: 44, color: IosColors.tertiaryLabel),
+                      Icon(Icons.inventory_2_outlined, size: 44, color: IosColors.tertiaryLabel),
                       const SizedBox(height: 12),
                       Text(
                         l10n.noModsFound,
-                        style: const TextStyle(fontSize: 14, color: IosColors.secondaryLabel),
+                        style: TextStyle(fontSize: 14, color: IosColors.secondaryLabel),
                       ),
                     ],
                   ),
@@ -6916,13 +7233,27 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                           // tarjetas ya están listas al entrar en pantalla.
                           cacheExtent: 700,
                           padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 220,
-                                childAspectRatio: 3 / 4.5,
-                                crossAxisSpacing: 14,
-                                mainAxisSpacing: 14,
-                              ),
+                          // Material: tarjetas algo más anchas y con más aire.
+                          gridDelegate: AppLayouts.isMinimal
+                              ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 240,
+                                  childAspectRatio: 0.66,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                )
+                              : AppMetrics.u
+                              ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 250,
+                                  childAspectRatio: 0.66,
+                                  crossAxisSpacing: AppMetrics.cardGap,
+                                  mainAxisSpacing: AppMetrics.cardGap,
+                                )
+                              : const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 220,
+                                  childAspectRatio: 3 / 4.5,
+                                  crossAxisSpacing: 14,
+                                  mainAxisSpacing: 14,
+                                ),
                           itemCount: mods.length,
                           itemBuilder: (context, index) {
                             return _buildModGridCard(mods[index], l10n);
@@ -6964,8 +7295,19 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         // 1. Guarda los cambios en el archivo nexus_info.json
         final extension = p.extension(imageFile.path);
         final newFileName = '_custom_cover$extension';
-        final destinationPath = p.join(mod.directory.path, newFileName);
-        await imageFile.copy(destinationPath);
+        // El original va a <mod>/nexus_cover/ y se generan sus miniaturas
+        // (tarjeta y detalle) ahora, no cuando se necesiten.
+        final String relCoverPath = await CoverService.storeOriginal(
+          mod.directory,
+          newFileName,
+          from: imageFile,
+        );
+        await ThumbnailService().runLimited(
+          () => CoverService.ensureThumbnails(
+            File(p.join(mod.directory.path, relCoverPath)),
+            force: true,
+          ),
+        );
 
         PaintingBinding.instance.imageCache.clear(); // <--- NUEVO (Fuerza a Flutter a olvidar la imagen vieja)
         PaintingBinding.instance.imageCache.clearLiveImages(); // <--- NUEVO (Limpia las imágenes que aún están en uso)
@@ -6976,7 +7318,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           final content = await infoFile.readAsString();
           if (content.isNotEmpty) data = json.decode(content);
         }
-        data['customCoverPath'] = newFileName;
+        data['customCoverPath'] = relCoverPath;
         data['customCoverAlignmentX'] = alignment.x;
         data['customCoverAlignmentY'] = alignment.y;
         final encoder = JsonEncoder.withIndent('  ');
@@ -7045,9 +7387,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
             throw Exception('HTTP ${response.statusCode}');
           }
           final String ext = p.extension(Uri.parse(url).path);
-          coverName = '_nexus_cover${ext.isNotEmpty ? ext : '.jpg'}';
+          coverName = await CoverService.storeOriginal(
+            mod.directory,
+            '_nexus_cover${ext.isNotEmpty ? ext : '.jpg'}',
+            bytes: response.bodyBytes,
+          );
           coverFile = File(p.join(mod.directory.path, coverName));
-          await coverFile.writeAsBytes(response.bodyBytes);
         } finally {
           if (mounted) setState(() => _isLoading = false);
         }
@@ -7072,6 +7417,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       data['customCoverAlignmentX'] = alignment.x;
       data['customCoverAlignmentY'] = alignment.y;
       await infoFile.writeAsString(JsonEncoder.withIndent('  ').convert(data));
+
+      // Miniaturas de la portada (si no las tenía, o si acaba de descargarse).
+      final File adjustedCover = coverFile;
+      await ThumbnailService().runLimited(
+        () => CoverService.ensureThumbnails(adjustedCover),
+      );
 
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
@@ -7118,13 +7469,9 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       Map<String, dynamic> data = json.decode(await infoFile.readAsString());
 
       // 3. Check if a cached nexus cover exists in the mod's folder.
-      String? cachedNexusCoverName;
-      await for (final file in mod.directory.list()) {
-        if (file is File && p.basename(file.path).startsWith('_nexus_cover')) {
-          cachedNexusCoverName = p.basename(file.path);
-          break;
-        }
-      }
+      // (en la carpeta nexus_cover, o en la raíz si es de una versión anterior)
+      final String? cachedNexusCoverName =
+          await CoverService.findNexusOriginalRelative(mod.directory);
 
       // 4. Update the JSON based on whether a cached cover was found.
       if (cachedNexusCoverName != null) {
@@ -7139,6 +7486,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         data.remove('customCoverPath');
         data.remove('customCoverAlignmentX');
         data.remove('customCoverAlignmentY');
+        // Ya no hay portada local: sus miniaturas (card/detail) sobran.
+        await CoverService.clearThumbnails(mod.directory);
       }
 
       // --- END: NEW SMART REVERT LOGIC ---
@@ -7146,6 +7495,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       // 5. Write the updated data back to the file.
       final encoder = JsonEncoder.withIndent('  ');
       await infoFile.writeAsString(encoder.convert(data));
+
+      // Si vuelve a la portada de Nexus, sus miniaturas se rehacen (las que
+      // había eran de la personalizada).
+      if (cachedNexusCoverName != null) {
+        await ModManagerService.ensureCoverThumbnails(mod.directory, data);
+      }
 
       // 6. Reload the mods list to reflect the changes in the UI.
       await _loadAllMods(clearHighlight: false);
@@ -7195,7 +7550,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     final isIgnored = _ignoredUpdates.contains(updateIdentifier);
     // ++ FIN DE LA MODIFICACIÓN ++
 
-    showModalBottomSheet<void>(
+    showModDetailsSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -7228,9 +7583,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         // ++ FIN DE LA MODIFICACIÓN ++
       ),
     );
-    Future<void>.delayed(const Duration(milliseconds: 600), () {
-  if (mounted) _showImageGalleryDialog(modInfo, prewarmOnly: true);
-});
+    // El precalentado del visor decodifica imágenes: se hace cuando el panel ya
+    // terminó de abrirse y de montar sus secciones (~380 ms de animación +
+    // ~300 ms de cascada), para que no compita con ellas.
+    Future<void>.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) _showImageGalleryDialog(modInfo, prewarmOnly: true);
+    });
   }
 
   /// Guarda una propiedad personalizada (versión o etiqueta) en el JSON y actualiza el estado.
@@ -7461,11 +7819,20 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         final alignment = newData['newCoverAlignment'] as Alignment?;
         final extension = p.extension(imageFile.path);
         final newFileName = '_custom_cover$extension';
-        final destinationPath = p.join(modDirectory.path, newFileName);
-        await imageFile.copy(destinationPath);
+        final String relCoverPath = await CoverService.storeOriginal(
+          modDirectory,
+          newFileName,
+          from: imageFile,
+        );
+        await ThumbnailService().runLimited(
+          () => CoverService.ensureThumbnails(
+            File(p.join(modDirectory.path, relCoverPath)),
+            force: true,
+          ),
+        );
         PaintingBinding.instance.imageCache.clear(); // <--- NUEVO
         PaintingBinding.instance.imageCache.clearLiveImages(); // <--- NUEVO
-        data['customCoverPath'] = newFileName;
+        data['customCoverPath'] = relCoverPath;
         if (alignment != null) {
           data['customCoverAlignmentX'] = alignment.x;
           data['customCoverAlignmentY'] = alignment.y;
@@ -7799,9 +8166,50 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
 
     if (choice == 'skip') {
       await prefs.setString(AppPrefs.skippedAppVersion, info.version);
-    } else if (choice == 'update' && mounted) {
-      await _runSelfUpdate(release: info);
+      if (mounted) {
+        final l = AppLocalizations.of(context)!;
+        NotificationService.instance.show(
+          context: context,
+          type: NotificationType.info,
+          title: l.appUpdateSkippedTitle(info.version),
+          description: l.appUpdateSkippedDesc,
+        );
+      }
+    } else {
+      // Búsqueda manual: el usuario volvió a mirar esta versión, así que
+      // deja de estar omitida.
+      if (manual &&
+          prefs.getString(AppPrefs.skippedAppVersion) == info.version) {
+        await prefs.remove(AppPrefs.skippedAppVersion);
+      }
+      if (choice == 'update' && mounted) {
+        await _runSelfUpdate(release: info);
+      }
     }
+  }
+
+  /// Versión de la app que el usuario eligió omitir (null si no hay).
+  Future<String?> _getSkippedAppVersion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(AppPrefs.skippedAppVersion);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Deshace "Omitir esta versión": vuelve a avisar de esa actualización.
+  Future<void> _clearSkippedAppVersion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(AppPrefs.skippedAppVersion);
+    } catch (_) {}
+    if (!mounted) return;
+    NotificationService.instance.show(
+      context: context,
+      type: NotificationType.success,
+      title: AppLocalizations.of(context)!.appUpdateUnskippedTitle,
+    );
   }
 
   /// Guarda las notas de la versión que se va a instalar.
@@ -7869,6 +8277,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   Future<void> _runSelfUpdate({String? zipPath, AppReleaseInfo? release}) async {
     assert(zipPath != null || release != null);
     final l10n = AppLocalizations.of(context)!;
+    _isSelfUpdating = true;
 
     final navigator = Navigator.of(context, rootNavigator: true);
     final state = ValueNotifier<SelfUpdateUiState>(
@@ -7909,6 +8318,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       if (!SelfUpdateService.canApply) {
         final count = plan.fileCount;
         await SelfUpdateService.discard(plan);
+        _isSelfUpdating = false;
         navigator.pop();
         if (mounted) {
           NotificationService.instance.show(
@@ -7929,6 +8339,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       await SelfUpdateService.relaunch(plan);
       await Future<void>.delayed(const Duration(milliseconds: 600));
     } catch (e) {
+      _isSelfUpdating = false;
       await _clearPendingChangelog();
       if (plan != null) await SelfUpdateService.discard(plan);
       try {
@@ -8176,8 +8587,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                       height: 315,
                       margin: const EdgeInsets.all(24), // Margen desde la esquina
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2a2a2a),
-                        borderRadius: BorderRadius.circular(12),
+                        color: IosColors.sunken,
+                        borderRadius: AppMetrics.radius(12),
                         border: Border.all(color: Colors.tealAccent, width: 2),
                         boxShadow: const [
                           BoxShadow(
@@ -8188,7 +8599,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: AppMetrics.radius(10),
                         child: Column(
                           children: [
                             // La imagen del traje
@@ -8200,7 +8611,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                                     Center(
                                   child: Icon(
                                     Icons.hide_image_outlined,
-                                    color: Colors.grey[700],
+                                    color: IosColors.tertiaryLabel,
                                     size: 50,
                                   ),
                                 ),
@@ -8213,7 +8624,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                                 outfitName,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                  color: IosColors.label,
                                   fontSize: 14,
                                 ),
                                 maxLines: 1,
@@ -8255,7 +8666,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
               width: 100,
               height: 211,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(8.0), // Un leve redondeo
+                borderRadius: AppMetrics.radius(8.0), // Un leve redondeo
                 child: Image.asset(
                   _generateOutfitImagePath(
                     outfitName,
@@ -8296,13 +8707,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   // ---------------------------------------------------------------------------
 
   // Colores del sistema de Apple (modo oscuro)
-  static const Color _iosBlue = Color(0xFF0A84FF);
-  static const Color _iosGreen = Color(0xFF30D158);
-  static const Color _iosYellow = Color(0xFFFFD60A);
-  static const Color _iosRed = Color(0xFFFF453A);
-  static const Color _iosOrange = Color(0xFFFF9F0A);
-  static const Color _iosLabelSecondary = Color(0x99EBEBF5); // 60 %
-  static const Color _iosLabelTertiary = Color(0x4DEBEBF5); // 30 %
+  static Color get _iosBlue => IosColors.blue;
+  static Color get _iosGreen => IosColors.green;
+  static Color get _iosYellow => IosColors.yellow;
+  static Color get _iosRed => IosColors.red;
+  static Color get _iosOrange => IosColors.orange;
+  static Color get _iosLabelSecondary => IosColors.secondaryLabel; // 60 %
+  static Color get _iosLabelTertiary => IosColors.tertiaryLabel; // 30 %
 
   Widget _buildNexusAvatar(double radius, Color accent) {
     final hasAvatar = _nexusAvatarUrl != null && _nexusAvatarUrl!.isNotEmpty;
@@ -8384,7 +8795,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
             height: 30,
             decoration: BoxDecoration(
               color: iconBg,
-              borderRadius: BorderRadius.circular(7),
+              borderRadius: AppMetrics.radius(7),
             ),
             child: Icon(icon, size: 18, color: Colors.white),
           ),
@@ -8397,19 +8808,19 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white,
+                        color: IosColors.label,
                         letterSpacing: -0.2,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       value == null ? 'N/A' : _formatThousands(value),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: IosColors.label,
                         letterSpacing: -0.2,
                         fontFeatures: [FontFeature.tabularFigures()],
                       ),
@@ -8417,16 +8828,16 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                     if (value != null)
                       Text(
                         ' / ${_formatThousands(effectiveMax)}',
-                        style: const TextStyle(fontSize: 12, color: _iosLabelTertiary),
+                        style: TextStyle(fontSize: 12, color: _iosLabelTertiary),
                       ),
                   ],
                 ),
                 const SizedBox(height: 7),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: AppMetrics.radius(3),
                   child: Stack(
                     children: [
-                      Container(height: 4, color: Colors.white.withOpacity(0.12)),
+                      Container(height: 4, color: IosColors.tint(0.12)),
                       AnimatedFractionallySizedBox(
                         duration: const Duration(milliseconds: 500),
                         curve: Curves.easeOutCubic,
@@ -8471,12 +8882,12 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
       elevation: 0,
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: AppMetrics.radius(14)),
       icon: Container(
         padding: const EdgeInsets.all(1.5),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+          border: Border.all(color: IosColors.tint(0.25), width: 1),
         ),
         child: _buildNexusAvatar(12.5, planColor),
       ),
@@ -8485,15 +8896,20 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
           enabled: false,
           padding: EdgeInsets.zero,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppMetrics.radius(14),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
               child: Container(
                 width: 284,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2C2C2E).withOpacity(0.78),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.14), width: 0.8),
+                  color: AppMetrics.md
+                      ? IosColors.elevated
+                      : IosColors.card.withOpacity(0.78),
+                  borderRadius: AppMetrics.radius(14),
+                  border: Border.all(
+                          color: IosColors.tint(0.14),
+                          width: AppMetrics.md ? 1 : 0.8,
+                        ),
                 ),
                 // Datos en tiempo real al abrir el menú
                 child: FutureBuilder<Map<String, dynamic>?>(
@@ -8533,19 +8949,22 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                                 _nexusUserName ?? l10n.nexusUserFallback,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.white,
+                                  color: IosColors.label,
                                   letterSpacing: -0.4,
                                 ),
                               ),
                               const SizedBox(height: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: AppMetrics.u ? 6.5 : 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: planColor.withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: AppMetrics.radius(20),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -8577,7 +8996,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                           padding: const EdgeInsets.fromLTRB(28, 4, 16, 6),
                           child: Text(
                             l10n.nexusApiRequestsRemaining,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               color: _iosLabelSecondary,
                               letterSpacing: -0.1,
@@ -8587,8 +9006,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                         Container(
                           margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.07),
-                            borderRadius: BorderRadius.circular(10),
+                            color: IosColors.tint(0.07),
+                            borderRadius: AppMetrics.radius(10),
                           ),
                           child: Column(
                             children: [
@@ -8604,7 +9023,7 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                               Container(
                                 height: 0.5,
                                 margin: const EdgeInsets.only(left: 54),
-                                color: Colors.white.withOpacity(0.15),
+                                color: IosColors.tint(0.15),
                               ),
                               _buildApiLimitRow(
                                 icon: Icons.schedule_rounded,

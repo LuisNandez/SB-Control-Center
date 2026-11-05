@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../notification_service.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/ios_widgets.dart';
+import '../theme/app_metrics.dart';
 
 class Mod801SteamDialog extends StatefulWidget {
   final String gameRootPath;
@@ -100,8 +101,8 @@ class _Mod801SteamDialogState extends State<Mod801SteamDialog> {
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
-              color: const Color(0x14FFFFFF),
-              borderRadius: BorderRadius.circular(10),
+              color: IosColors.overlay(0x14),
+              borderRadius: AppMetrics.radius(10),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +111,7 @@ class _Mod801SteamDialogState extends State<Mod801SteamDialog> {
                   if (i > 0) const SizedBox(height: 8),
                   Text(
                     steps[i],
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       height: 1.3,
                       letterSpacing: -0.1,
@@ -162,14 +163,14 @@ class _Mod801SteamDialogState extends State<Mod801SteamDialog> {
               padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
               decoration: BoxDecoration(
                 color: IosColors.fill,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: AppMetrics.radius(10),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: SelectableText(
                       _pathController.text,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Menlo',
                         fontFamilyFallback: ['SF Mono', 'Consolas', 'monospace'],
                         fontSize: 11.5,
@@ -183,7 +184,7 @@ class _Mod801SteamDialogState extends State<Mod801SteamDialog> {
                     width: 32,
                     height: 32,
                     tooltip: l10n.mod801BtnCopy,
-                    icon: const HugeIcon(
+                    icon: HugeIcon(
                       icon: HugeIcons.strokeRoundedCopy01,
                       color: IosColors.blue,
                       size: 18.0,

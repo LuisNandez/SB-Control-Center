@@ -105,7 +105,7 @@ class _SelfEndorseSectionState extends State<SelfEndorseSection> {
           Text(
             l10n.aboutEndorseCta,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12.5,
               color: IosColors.secondaryLabel,
             ),
@@ -130,7 +130,7 @@ class _SelfEndorseSectionState extends State<SelfEndorseSection> {
             Text(
               problemText,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11.5, color: IosColors.red),
+              style: TextStyle(fontSize: 11.5, color: IosColors.red),
             ),
             if (service.problem == SelfEndorseProblem.notDownloaded)
               IosTextButton(
@@ -150,13 +150,13 @@ class _SelfEndorseSectionState extends State<SelfEndorseSection> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.favorite_rounded, size: 15, color: IosColors.red),
+          Icon(Icons.favorite_rounded, size: 15, color: IosColors.red),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               l10n.aboutEndorseThanks,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: IosColors.label,

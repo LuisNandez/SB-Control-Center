@@ -20,6 +20,11 @@ class ModImage extends StatelessWidget {
   /// instante mientras llega la imagen completa, que aparece con un fundido.
   final File? placeholder;
 
+  /// Si es false solo se muestra la miniatura ([placeholder]) y NO se empieza
+  /// a cargar ni decodificar la imagen completa. Al pasar a true se carga y
+  /// aparece con un fundido. Sirve para no decodificar durante una animación.
+  final bool loadFull;
+
   const ModImage({
     super.key,
     required this.imageUrl,
@@ -29,6 +34,7 @@ class ModImage extends StatelessWidget {
     this.height,
     this.decodeToLayout = false,
     this.placeholder,
+    this.loadFull = true,
   });
 
   /// Fundido de entrada cuando la imagen termina de decodificarse. Si ya
@@ -86,8 +92,10 @@ class ModImage extends StatelessWidget {
     final File? thumb = placeholder;
 
     Widget content(int? cacheWidth) {
-      final Widget image = _buildImage(context, cacheWidth);
-      if (thumb == null) return image;
+      final Widget? image = loadFull ? _buildImage(context, cacheWidth) : null;
+      if (thumb == null) {
+        return image ?? SizedBox(height: height, width: double.infinity);
+      }
       return Stack(
         fit: StackFit.passthrough,
         children: [
@@ -100,7 +108,7 @@ class ModImage extends StatelessWidget {
             errorBuilder: (context, error, stackTrace) =>
                 const SizedBox.shrink(),
           ),
-          image,
+          if (image != null) image,
         ],
       );
     }
@@ -154,7 +162,23 @@ class _ModThumbnailImageState extends State<ModThumbnailImage> {
   @override
   void initState() {
     super.initState();
+    widget.thumbnailService.coverRevision.addListener(_onCoversRebuilt);
     _resolve();
+  }
+
+  @override
+  void dispose() {
+    widget.thumbnailService.coverRevision.removeListener(_onCoversRebuilt);
+    super.dispose();
+  }
+
+  /// Se rehicieron miniaturas de portadas: si el archivo que esta tarjeta
+  /// tenía ya no existe (p. ej. card.jpg -> card.webp) se vuelve a resolver.
+  void _onCoversRebuilt() {
+    if (!mounted) return;
+    final File? current = _imageFile;
+    if (current != null && !current.existsSync()) _resolve();
+    if (mounted) setState(() {});
   }
 
   @override

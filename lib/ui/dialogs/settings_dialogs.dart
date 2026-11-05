@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/app_localizations.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/ios_widgets.dart';
+import '../theme/app_metrics.dart';
 
 /// Página de Nexus Mods donde se obtiene la clave de API personal
 /// (aparece al final de la página, en "Personal API Key").
@@ -204,11 +205,11 @@ class SettingsDialogs {
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: IosColors.fill,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppMetrics.radius(20),
                 ),
                 child: Text(
                   l10n.aboutVersion(version),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w500,
                     letterSpacing: -0.1,
@@ -360,7 +361,7 @@ class SettingsDialogs {
                   SizedBox(
                     width: 20,
                     child: e.key == current
-                        ? const Icon(Icons.check_rounded,
+                        ? Icon(Icons.check_rounded,
                             size: 16, color: IosColors.blue)
                         : null,
                   ),
@@ -384,23 +385,23 @@ class SettingsDialogs {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: IosColors.fill,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppMetrics.radius(8),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.language_rounded,
+                Icon(Icons.language_rounded,
                     size: 16, color: IosColors.secondaryLabel),
                 const SizedBox(width: 6),
                 Text(
                   languages[current] ?? current,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: IosColors.label,
                   ),
                 ),
                 const SizedBox(width: 2),
-                const Icon(Icons.expand_more_rounded,
+                Icon(Icons.expand_more_rounded,
                     size: 16, color: IosColors.secondaryLabel),
               ],
             ),
@@ -462,7 +463,7 @@ class SettingsDialogs {
                   Text(
                     l10n.dialogContentApiKeyInstructions,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       height: 1.35,
                       color: IosColors.secondaryLabel,
@@ -495,7 +496,7 @@ class SettingsDialogs {
                       padding: const EdgeInsets.only(top: 8, left: 2),
                       child: Text(
                         error!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: IosColors.red,
                         ),
@@ -511,7 +512,7 @@ class SettingsDialogs {
                           const SizedBox(width: 8),
                           Text(
                             l10n.validatingApiKey,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               color: IosColors.secondaryLabel,
                             ),
@@ -567,7 +568,7 @@ class SettingsDialogs {
                   child: Text(
                     l10n.dialogNoSkippedVersions,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13.5,
                       color: IosColors.secondaryLabel,
                     ),
@@ -595,7 +596,7 @@ class SettingsDialogs {
                                       item.name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 14,
                                         letterSpacing: -0.2,
                                         color: IosColors.label,
@@ -606,7 +607,7 @@ class SettingsDialogs {
                                       '${l10n.dialogSkippedVersions}: ${item.version}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12,
                                         color: IosColors.secondaryLabel,
                                       ),
@@ -615,7 +616,7 @@ class SettingsDialogs {
                                 ),
                               ),
                               IosToolbarButton(
-                                icon: const HugeIcon(
+                                icon: HugeIcon(
                                   icon: HugeIcons.strokeRoundedDelete01,
                                   color: IosColors.red,
                                   size: 18.0,
@@ -667,8 +668,8 @@ class IosListCard extends StatelessWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0x14FFFFFF),
-        borderRadius: BorderRadius.circular(10),
+        color: IosColors.overlay(0x14),
+        borderRadius: AppMetrics.radius(10),
       ),
       child: child,
     );
@@ -682,7 +683,7 @@ class IosRowSeparator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 14),
-      child: Container(height: 0.5, color: const Color(0x1FFFFFFF)),
+      child: Container(height: 0.5, color: IosColors.overlay(0x1F)),
     );
   }
 }
@@ -727,8 +728,8 @@ class IosChoiceRowState extends State<IosChoiceRow> {
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           color: _pressed
-              ? const Color(0x1FFFFFFF)
-              : (_hover ? const Color(0x0FFFFFFF) : Colors.transparent),
+              ? IosColors.overlay(0x1F)
+              : (_hover ? IosColors.overlay(0x0F) : Colors.transparent),
           child: Row(
             children: [
               Expanded(
@@ -746,7 +747,7 @@ class IosChoiceRowState extends State<IosChoiceRow> {
                 ),
               ),
               if (widget.selected)
-                const Icon(
+                Icon(
                   Icons.check_rounded,
                   size: 19,
                   color: IosColors.blue,

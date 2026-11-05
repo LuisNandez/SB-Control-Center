@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/ios_theme.dart';
+import '../theme/app_metrics.dart';
 
 // ============================================================================
 // 1) Normalización: convierte el HTML/emojis del release en Markdown limpio.
@@ -240,7 +241,7 @@ class _ChangelogViewState extends State<ChangelogView> {
         child: Text(
           widget.emptyText,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 13, color: IosColors.secondaryLabel),
+          style: TextStyle(fontSize: 13, color: IosColors.secondaryLabel),
         ),
       );
     }
@@ -271,12 +272,12 @@ class _ListItem {
 class _ChangelogBuilder {
   final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
 
-  static const TextStyle _body =
-      TextStyle(fontSize: 13.5, height: 1.45, color: Color(0xFFE5E5EA));
-  static const TextStyle _mono = TextStyle(
+  static TextStyle get _body =>
+      TextStyle(fontSize: 13.5, height: 1.45, color: IosColors.labelSoft);
+  static TextStyle get _mono => TextStyle(
     fontSize: 12.5,
     height: 1.4,
-    color: Color(0xFFE5E5EA),
+    color: IosColors.labelSoft,
     fontFamily: 'Consolas',
     fontFamilyFallback: <String>['Cascadia Mono', 'Courier New', 'monospace'],
   );
@@ -609,7 +610,7 @@ class _ChangelogBuilder {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: const Color(0x4D000000),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppMetrics.radius(8),
           border: Border.all(color: IosColors.separator, width: 0.8),
         ),
         child: SingleChildScrollView(
@@ -686,7 +687,7 @@ class _ChangelogBuilder {
     final cols = header.length;
     TableRow row(List<String> cells, {bool head = false}) {
       return TableRow(
-        decoration: head ? const BoxDecoration(color: Color(0x14FFFFFF)) : null,
+        decoration: head ? BoxDecoration(color: IosColors.overlay(0x14)) : null,
         children: [
           for (int c = 0; c < cols; c++)
             Padding(
@@ -815,7 +816,7 @@ class _ChangelogBuilder {
       child: GestureDetector(
         onTap: () => _open(url),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppMetrics.radius(8),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: image,
@@ -891,8 +892,10 @@ class _ChangelogBuilder {
                   'monospace',
                 ],
                 fontSize: (style.fontSize ?? 13.5) - 0.5,
-                backgroundColor: const Color(0x2EFFFFFF),
-                color: const Color(0xFFF2C07B),
+                backgroundColor: IosColors.overlay(0x2E),
+                color: IosColors.palette.isDark
+                    ? const Color(0xFFF1C189)
+                    : const Color(0xFF964D09),
               ),
             ),
           );

@@ -5,6 +5,9 @@ import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../theme/ios_theme.dart';
+import '../theme/app_metrics.dart';
+import 'app_title_bar.dart' show WindowChrome;
 
 // ============================================================================
 //  ORIGEN DE LA TRANSICIÓN
@@ -346,14 +349,22 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       ..forward();
   }
 
-  /// Rectángulo de la imagen ajustada (contain) dentro de la pantalla.
+  /// Alto que ocupa la barra de la ventana fusionada con la de herramientas.
+  /// La imagen no debe invadirlo: se reserva ese espacio arriba (0 si la barra
+  /// no está fusionada, porque entonces el visor ya empieza debajo de ella).
+  double get _topInset => WindowChrome.merged.value ? WindowChrome.barHeight : 0.0;
+
+  /// Rectángulo de la imagen ajustada (contain) dentro del área visible, es
+  /// decir, la pantalla menos el espacio de la barra superior.
   Rect _targetRect(Size screen) {
+    final double top = _topInset.clamp(0.0, screen.height);
+    final Rect area = Rect.fromLTWH(0, top, screen.width, screen.height - top);
     final Size? s = widget.initialImageSize;
-    if (s == null || s.isEmpty) return Offset.zero & screen;
-    final Size fitted = applyBoxFit(BoxFit.contain, s, screen).destination;
+    if (s == null || s.isEmpty) return area;
+    final Size fitted = applyBoxFit(BoxFit.contain, s, area.size).destination;
     return Rect.fromLTWH(
-      (screen.width - fitted.width) / 2,
-      (screen.height - fitted.height) / 2,
+      area.left + (area.width - fitted.width) / 2,
+      area.top + (area.height - fitted.height) / 2,
       fitted.width,
       fitted.height,
     );
@@ -504,30 +515,37 @@ class _ImageViewerPageState extends State<ImageViewerPage>
           // Capa propia: mover/escalar al arrastrar solo recoloca la imagen ya
           // pintada, sin volver a pintarla.
           child: RepaintBoundary(
-            child: PageView.builder(
-              controller: _pages,
-              itemCount: widget.images.length,
-              physics: _zoomed
-                  ? const NeverScrollableScrollPhysics()
-                  : const BouncingScrollPhysics(),
-              onPageChanged: (i) {
-                setState(() {
-                  _index = i;
-                  _zoomed = false;
-                });
-                _precacheNeighbours();
-              },
-              itemBuilder: (context, i) => _ZoomablePage(
-                key: ValueKey<String>('page-$i-${widget.images[i]}'),
-                preview: _previewProviderFor(
-                  widget.images[i],
-                  widget.previewWidth,
+            // Deja libre el espacio de la barra fusionada y recorta ahí la
+            // imagen (el zoom, que no recorta por sí solo, tampoco la invade).
+            child: Padding(
+              padding: EdgeInsets.only(top: _topInset),
+              child: ClipRect(
+                child: PageView.builder(
+                  controller: _pages,
+                  itemCount: widget.images.length,
+                  physics: _zoomed
+                      ? const NeverScrollableScrollPhysics()
+                      : const BouncingScrollPhysics(),
+                  onPageChanged: (i) {
+                    setState(() {
+                      _index = i;
+                      _zoomed = false;
+                    });
+                    _precacheNeighbours();
+                  },
+                  itemBuilder: (context, i) => _ZoomablePage(
+                    key: ValueKey<String>('page-$i-${widget.images[i]}'),
+                    preview: _previewProviderFor(
+                      widget.images[i],
+                      widget.previewWidth,
+                    ),
+                    full: _providerFor(widget.images[i]),
+                    loadFull: _fullEnabled,
+                    onZoomChanged: (z) {
+                      if (z != _zoomed) setState(() => _zoomed = z);
+                    },
+                  ),
                 ),
-                full: _providerFor(widget.images[i]),
-                loadFull: _fullEnabled,
-                onZoomChanged: (z) {
-                  if (z != _zoomed) setState(() => _zoomed = z);
-                },
               ),
             ),
           ),
@@ -538,11 +556,17 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   Widget _buildControls() {
     final int total = widget.images.length;
+    // Con la barra fusionada y los botones de la ventana a la derecha
+    // (minimizar / maximizar / cerrar flotan sobre el visor), el botón de
+    // cerrar del visor se coloca justo DEBAJO de ellos para no superponerse.
+    final bool underWindowButtons = WindowChrome.rightInset > 0;
+    final double closeTop =
+        underWindowButtons ? WindowChrome.barHeight + 8 : 14;
     return SafeArea(
       child: Stack(
         children: [
           Positioned(
-            top: 14,
+            top: closeTop,
             right: 14,
             child: _GlassCircle(
               tooltip: widget.closeTooltip,
@@ -775,13 +799,13 @@ class _GlassCircle extends StatelessWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: Container(
-              width: 38,
-              height: 38,
+              width: AppMetrics.md ? AppMetrics.iconButton : 38,
+              height: AppMetrics.md ? AppMetrics.iconButton : 38,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0x55222222),
-                border: Border.all(color: const Color(0x22FFFFFF), width: 0.5),
+                border: Border.all(color: IosColors.overlay(0x22), width: 0.5),
               ),
               child: child,
             ),

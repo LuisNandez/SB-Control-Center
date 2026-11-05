@@ -1,7 +1,11 @@
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/cupertino.dart' show CupertinoSwitch;
 import 'package:flutter/material.dart';
+import '../theme/minimal_style.dart';
+import '../theme/app_metrics.dart';
 import '../theme/ios_theme.dart';
+import 'material_layout_widgets.dart';
+import '../theme/app_metrics.dart';
 
 /// Insignia de icono de Ajustes de iOS: cuadrado redondeado con degradado
 /// sutil y el icono en blanco.
@@ -19,19 +23,36 @@ class IosIconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Material: las insignias de las filas miden todas lo mismo, son planas
+    // (sin degradado) y con el redondeo de los controles.
+    final bool md = AppMetrics.md && size == 28;
+    final double s = AppMetrics.u && size == 28 ? AppMetrics.iconButton : size;
+    
     return Container(
-      width: size,
-      height: size,
+      width: s,
+      height: s,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.23),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color.lerp(color, Colors.white, 0.14)!, color],
-        ),
+        borderRadius: md
+            ? BorderRadius.circular(AppMetrics.controlRadius)
+            : BorderRadius.circular(size * 0.23),
+        color: md ? color : null,
+        boxShadow: null,
+        gradient: md
+            ? null
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color.lerp(color, Colors.white, 0.14)!, color],
+              ),
       ),
-      child: child,
+      child: AppMetrics.u
+          ? SizedBox(
+              width: AppMetrics.iconSize,
+              height: AppMetrics.iconSize,
+              child: FittedBox(fit: BoxFit.contain, child: child),
+            )
+          : child,
     );
   }
 }
@@ -57,13 +78,18 @@ class IosSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool md = AppMetrics.md;
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
       if (i > 0) {
         rows.add(
           Padding(
-            padding: EdgeInsets.only(left: dividerIndent),
-            child: Container(height: 0.5, color: IosColors.separator),
+            // Material: el separador ocupa todo el ancho de la tarjeta.
+            padding: EdgeInsets.only(left: md ? 0 : dividerIndent),
+            child: Container(
+              height: AppMetrics.hairline,
+              color: IosColors.separator,
+            ),
           ),
         );
       }
@@ -71,32 +97,38 @@ class IosSettingsSection extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 26),
+      padding: EdgeInsets.only(bottom: AppMetrics.u ? 24 : 26),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (title != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 7),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, MinimalStyle.on ? 10 : (AppMetrics.u ? 8 : 7)),
               child: Text(
-                title!.toUpperCase(),
+                md ? title! : title!.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 0.2,
-                  color: IosColors.secondaryLabel,
+                style: TextStyle(
+                  fontSize: MinimalStyle.on ? 13 : (AppMetrics.u ? 14 : 12),
+                  fontWeight: md ? FontWeight.w600 : FontWeight.w400,
+                  letterSpacing: md ? 0 : 0.2,
+                  color: md && !MinimalStyle.on
+                      ? IosColors.blue
+                      : IosColors.secondaryLabel,
                 ),
               ),
             ),
           Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: IosColors.card,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0x0FFFFFFF), width: 0.5),
-            ),
+                    color: IosColors.card,
+                    borderRadius:
+                        BorderRadius.circular(md ? AppMetrics.cardRadius : 12),
+                    border: Border.all(
+                      color: IosColors.overlay(md ? 0x1F : 0x0F),
+                      width: AppMetrics.hairline,
+                    ),
+                  ),
             child: Column(children: rows),
           ),
           if (footer != null)
@@ -104,8 +136,8 @@ class IosSettingsSection extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 7, 16, 0),
               child: Text(
                 footer!,
-                style: const TextStyle(
-                  fontSize: 12,
+                style: TextStyle(
+                  fontSize: AppMetrics.u ? 13 : 12,
                   height: 1.35,
                   color: IosColors.secondaryLabel,
                 ),
@@ -162,8 +194,8 @@ class _IosSettingsTileState extends State<IosSettingsTile> {
     final Color bg = !enabled
         ? Colors.transparent
         : (_pressed
-            ? const Color(0x1FFFFFFF)
-            : (_hover ? const Color(0x0FFFFFFF) : Colors.transparent));
+            ? IosColors.overlay(0x1F)
+            : (_hover ? IosColors.overlay(0x0F) : Colors.transparent));
 
     return MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
@@ -181,8 +213,12 @@ class _IosSettingsTileState extends State<IosSettingsTile> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 90),
           color: bg,
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+          constraints: BoxConstraints(
+            minHeight: AppMetrics.u ? AppMetrics.tileMinHeight : 48,
+          ),
+          padding: AppMetrics.u
+              ? const EdgeInsets.fromLTRB(16, 8, 16, 8)
+              : const EdgeInsets.fromLTRB(14, 8, 14, 8),
           child: Row(
             children: [
               if (widget.leading != null) ...[
@@ -199,8 +235,8 @@ class _IosSettingsTileState extends State<IosSettingsTile> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13.5,
-                        letterSpacing: -0.15,
+                        fontSize: AppMetrics.u ? 15 : 13.5,
+                        letterSpacing: AppMetrics.u ? 0 : -0.15,
                         color: widget.destructive
                             ? IosColors.red
                             : IosColors.label,
@@ -213,7 +249,7 @@ class _IosSettingsTileState extends State<IosSettingsTile> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11.5,
+                          fontSize: AppMetrics.u ? 13 : 11.5,
                           height: 1.3,
                           color:
                               widget.subtitleColor ?? IosColors.secondaryLabel,
@@ -235,9 +271,9 @@ class _IosSettingsTileState extends State<IosSettingsTile> {
                     textAlign: TextAlign.right,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      letterSpacing: -0.15,
+                    style: TextStyle(
+                      fontSize: AppMetrics.u ? 14 : 13,
+                      letterSpacing: AppMetrics.u ? 0 : -0.15,
                       color: IosColors.secondaryLabel,
                     ),
                   ),
@@ -249,9 +285,9 @@ class _IosSettingsTileState extends State<IosSettingsTile> {
               ],
               if (widget.showChevron) ...[
                 const SizedBox(width: 4),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
-                  size: 20,
+                  size: AppMetrics.u ? AppMetrics.iconSize : 20,
                   color: IosColors.tertiaryLabel,
                 ),
               ],
@@ -273,6 +309,7 @@ class IosSettingsSwitchTile extends StatelessWidget {
     required this.onChanged,
     this.leading,
     this.subtitle,
+    this.enabled = true,
   });
 
   final String title;
@@ -281,18 +318,25 @@ class IosSettingsSwitchTile extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// false = fila atenuada y sin respuesta al toque (opción no disponible).
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
-    return IosSettingsTile(
+    final Widget tile = IosSettingsTile(
       leading: leading,
       title: title,
       subtitle: subtitle,
       onTap: () => onChanged(!value),
-      trailing: CupertinoSwitch(
-        value: value,
-        activeColor: IosColors.green,
-        onChanged: onChanged,
-      ),
+      trailing: AppMetrics.md
+          ? MdSwitch(value: value, onChanged: onChanged)
+          : CupertinoSwitch(
+              value: value,
+              activeColor: IosColors.green,
+              onChanged: onChanged,
+            ),
     );
+    if (enabled) return tile;
+    return Opacity(opacity: 0.45, child: IgnorePointer(child: tile));
   }
 }

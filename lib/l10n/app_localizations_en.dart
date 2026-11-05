@@ -29,6 +29,103 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguageDesc => 'Choose the application language';
 
   @override
+  String get settingsTheme => 'Theme';
+
+  @override
+  String get settingsThemeDesc =>
+      'Choose the app\'s look. “Automatic” follows your system\'s light or dark mode.';
+
+  @override
+  String get themeSystem => 'Automatic';
+
+  @override
+  String get themeDark => 'Dark';
+
+  @override
+  String get themeMidnight => 'Midnight';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get themeOcean => 'Ocean';
+
+  @override
+  String get themeForest => 'Forest';
+
+  @override
+  String get themeViolet => 'Violet';
+
+  @override
+  String get themeSand => 'Sand';
+
+  @override
+  String get themeCocoa => 'Cocoa';
+
+  @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get settingsLayout => 'Layout';
+
+  @override
+  String get settingsLayoutDesc =>
+      'Choose how the main window looks: macOS style (translucent and rounded), Material with larger cards, or Flat (clean, thin outlines). It applies instantly.';
+
+  @override
+  String get layoutMacos => 'macOS style';
+
+  @override
+  String get layoutMaterial => 'Material';
+
+  @override
+  String get layoutFlat => 'Flat';
+
+  @override
+  String get settingsGpuAccel => 'Use the graphics card';
+
+  @override
+  String get settingsGpuAccelDesc =>
+      'Prefers the dedicated GPU if your PC has one';
+
+  @override
+  String get settingsGpuAccelFooter =>
+      'Asks Windows to run the app on the high-performance graphics card, useful on laptops with both integrated and dedicated graphics. If your PC has a single graphics card, nothing changes. Applies after restarting the app.';
+
+  @override
+  String get settingsGpuAccelRestart => 'Restart the app to apply the change';
+
+  @override
+  String get settingsGpuAccelFailed =>
+      'The Windows graphics preference could not be changed';
+
+  @override
+  String get settingsGpuAccelSingle => 'Your PC has only one graphics card';
+
+  @override
+  String get settingsGpuRestartTitle => 'Restart now?';
+
+  @override
+  String get settingsGpuRestartMsg =>
+      'To apply the graphics change, the app will close and reopen automatically.';
+
+  @override
+  String get settingsGpuRestartNow => 'Restart now';
+
+  @override
+  String get settingsGpuRestartLater => 'Later';
+
+  @override
+  String get ecoModeTitle => 'Power saving mode';
+
+  @override
+  String get ecoModeMessage =>
+      'Stellar Blade is running. The app is using as few resources as possible and will return to normal when you close the game.';
+
+  @override
+  String get ecoModeShowApp => 'Show the app anyway';
+
+  @override
   String get settingsAbout => 'About';
 
   @override
@@ -1247,6 +1344,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get changelogRetry => 'Retry';
+
+  @override
+  String get settingsSkippedAppVersion => 'Skipped app update';
+
+  @override
+  String settingsSkippedAppVersionDesc(String version) {
+    return 'Version $version is hidden. Tap to get notified about it again.';
+  }
+
+  @override
+  String appUpdateSkippedTitle(String version) {
+    return 'Version $version skipped';
+  }
+
+  @override
+  String get appUpdateSkippedDesc =>
+      'You can undo this in Settings → Connectivity & Updates.';
+
+  @override
+  String get appUpdateUnskippedTitle =>
+      'You\'ll be notified about app updates again';
 
   @override
   String get devExtractNoData =>

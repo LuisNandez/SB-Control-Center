@@ -4,6 +4,7 @@ import '../../services/splash_mods_handler.dart';
 import '../../l10n/app_localizations.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/ios_widgets.dart';
+import '../theme/app_metrics.dart';
 
 class SplashModSelectionDialog extends StatefulWidget {
   final SplashSelectionData modData;
@@ -49,15 +50,15 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: const Color(0x14FFFFFF),
-                borderRadius: BorderRadius.circular(10),
+                color: IosColors.overlay(0x14),
+                borderRadius: AppMetrics.radius(10),
               ),
               child: ListView.separated(
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
                 itemCount: folders.length,
                 separatorBuilder: (_, __) =>
-                    Container(height: 0.5, color: const Color(0x1FFFFFFF)),
+                    Container(height: 0.5, color: IosColors.overlay(0x1F)),
                 itemBuilder: (context, index) =>
                     _buildFolder(folders[index], index),
               ),
@@ -69,7 +70,7 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
               child: Text(
                 l10n.snackBarSplashNoSelection,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12.5, color: IosColors.red),
+                style: TextStyle(fontSize: 12.5, color: IosColors.red),
               ),
             ),
         ],
@@ -129,7 +130,7 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
                   child: _CheckCircle(state: checkState),
                 ),
                 const SizedBox(width: 10),
-                const Icon(
+                Icon(
                   Icons.folder_rounded,
                   color: IosColors.blue,
                   size: 20,
@@ -142,7 +143,7 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
                         : folder.folderName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.2,
@@ -153,7 +154,7 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
                 AnimatedRotation(
                   turns: expanded ? 0.25 : 0,
                   duration: const Duration(milliseconds: 180),
-                  child: const Icon(
+                  child: Icon(
                     Icons.chevron_right_rounded,
                     size: 20,
                     color: IosColors.tertiaryLabel,
@@ -203,9 +204,9 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
               height: 42,
               margin: const EdgeInsets.only(right: 12),
               decoration: BoxDecoration(
-                color: const Color(0x1FFFFFFF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0x1FFFFFFF), width: 0.5),
+                color: IosColors.overlay(0x1F),
+                borderRadius: AppMetrics.radius(8),
+                border: Border.all(color: IosColors.overlay(0x1F), width: 0.5),
                 image: isImage
                     ? DecorationImage(
                         image: FileImage(img.file),
@@ -215,7 +216,7 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
               ),
               child: isImage
                   ? null
-                  : const Icon(
+                  : Icon(
                       Icons.settings_rounded,
                       size: 20,
                       color: IosColors.secondaryLabel,
@@ -226,7 +227,7 @@ class _SplashModSelectionDialogState extends State<SplashModSelectionDialog> {
                 img.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   letterSpacing: -0.1,
                   color: IosColors.secondaryLabel,

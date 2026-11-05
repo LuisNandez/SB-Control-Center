@@ -9,6 +9,7 @@ import '../../services/download_manager.dart';
 import '../theme/ios_theme.dart';
 import 'ios_progress_bar.dart';
 import 'ios_widgets.dart';
+import '../theme/app_metrics.dart';
 
 class DownloadOverlay {
   static OverlayEntry? _overlayEntry;
@@ -61,9 +62,12 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
   static const Duration _autoCollapseDelay = Duration(seconds: 5);
 
   // Material translúcido (como las barras de macOS / centros de control de iOS).
-  static const Color _collapsedColor = Color(0xCC3A3A3C);
-  static const Color _expandedColor = Color(0xEB2C2C2E);
-  static const Color _glassBorder = Color(0x2EFFFFFF);
+  // Material: superficie sólida (sin transparencia ni desenfoque).
+  static Color get _collapsedColor =>
+      AppMetrics.md ? IosColors.elevated : IosColors.elevated.withAlpha(0xCC);
+  static Color get _expandedColor =>
+      AppMetrics.md ? IosColors.elevated : IosColors.card.withAlpha(0xEB);
+  static Color get _glassBorder => IosColors.overlay(0x2E);
 
   bool _isExpanded = false;
   bool _hovering = false; // ratón sobre la píldora (cualquier estado)
@@ -225,7 +229,8 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
       builder: (context, t, _) {
-        final radius = lerpDouble(20, 22, t)!;
+        final radius =
+            AppMetrics.md ? AppMetrics.cardRadius : lerpDouble(20, 22, t)!;
         return IosGlass(
           shadow: true,
           blur: 34,
@@ -285,7 +290,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
 
     Widget leading;
     String label;
-    const Color labelColor = IosColors.label;
+    final Color labelColor = IosColors.label;
     bool showPercent = false;
 
     if (inProgress > 0) {
@@ -295,11 +300,11 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
       label = l10n.downloadingModsCount(inProgress);
       showPercent = downloading > 0 && progress > 0;
     } else if (errors > 0) {
-      leading = const Icon(Icons.error_rounded, size: 18, color: IosColors.red);
+      leading = Icon(Icons.error_rounded, size: 18, color: IosColors.red);
       label = l10n.downloadError;
     } else {
       leading =
-          const Icon(Icons.pause_circle_filled_rounded, size: 18, color: IosColors.orange);
+          Icon(Icons.pause_circle_filled_rounded, size: 18, color: IosColors.orange);
       label = l10n.downloadPausedStatus;
       showPercent = progress > 0;
     }
@@ -340,7 +345,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                 const SizedBox(width: 8),
                 Text(
                   '${(progress * 100).round()}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: IosColors.secondaryLabel,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w500,
@@ -376,7 +381,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                 Expanded(
                   child: Text(
                     l10n.activeDownloads,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: IosColors.label,
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
@@ -388,7 +393,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
               ],
             ),
           ),
-          Container(height: 0.5, color: const Color(0x1FFFFFFF)),
+          Container(height: 0.5, color: IosColors.overlay(0x1F)),
           Flexible(
             child: ListView.separated(
               shrinkWrap: true,
@@ -405,7 +410,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.info_outline_rounded,
                     size: 13,
                     color: IosColors.tertiaryLabel,
@@ -416,7 +421,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                       plan == NexusPlan.supporter
                           ? l10n.downloadSupporterAccountLimit
                           : l10n.downloadMemberAccountLimit,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: IosColors.secondaryLabel,
                         fontSize: 11.5,
                       ),
@@ -444,11 +449,11 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
     } else if (task.status == DownloadStatus.complete) {
       body = Row(
         children: [
-          const Expanded(
+          Expanded(
             child: IosProgressBar(value: 1.0, color: IosColors.green),
           ),
           const SizedBox(width: 10),
-          const Icon(
+          Icon(
             Icons.check_circle_rounded,
             color: IosColors.green,
             size: 18,
@@ -462,14 +467,14 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
           Expanded(
             child: Text(
               task.errorMessage ?? l10n.downloadErrorGeneral,
-              style: const TextStyle(color: IosColors.red, fontSize: 12),
+              style: TextStyle(color: IosColors.red, fontSize: 12),
             ),
           ),
           IosToolbarButton(
             width: 30,
             height: 30,
             tooltip: l10n.downloadRetryTooltip,
-            icon: const Icon(
+            icon: Icon(
               Icons.refresh_rounded,
               color: IosColors.blue,
               size: 19,
@@ -483,7 +488,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
             width: 30,
             height: 30,
             tooltip: l10n.downloadCancel,
-            icon: const Icon(
+            icon: Icon(
               Icons.close_rounded,
               color: IosColors.red,
               size: 20,
@@ -495,7 +500,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
     } else if (task.status == DownloadStatus.cancelled) {
       body = Text(
         l10n.downloadCancelled,
-        style: const TextStyle(color: IosColors.orange, fontSize: 12),
+        style: TextStyle(color: IosColors.orange, fontSize: 12),
       );
     } else {
       body = Column(
@@ -514,7 +519,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                   children: [
                     Text(
                       task.downloaded,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: IosColors.secondaryLabel,
                       ),
@@ -541,7 +546,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                             decoration: BoxDecoration(
                               color: (plan.isPremium ? IosColors.yellow : IosColors.green)
                                   .withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: AppMetrics.radius(6),
                             ),
                             child: Text(
                               (plan.isPremium
@@ -569,7 +574,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                   width: 30,
                   height: 30,
                   tooltip: l10n.downloadPause,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.pause_rounded,
                     color: IosColors.icon,
                     size: 20,
@@ -584,7 +589,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                   width: 30,
                   height: 30,
                   tooltip: l10n.downloadResume,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.play_arrow_rounded,
                     color: IosColors.blue,
                     size: 22,
@@ -596,7 +601,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
                 width: 30,
                 height: 30,
                 tooltip: l10n.downloadCancel,
-                icon: const Icon(
+                icon: Icon(
                   Icons.close_rounded,
                   color: IosColors.red,
                   size: 20,
@@ -612,8 +617,8 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
       decoration: BoxDecoration(
-        color: const Color(0x14FFFFFF),
-        borderRadius: BorderRadius.circular(12),
+        color: IosColors.overlay(0x14),
+        borderRadius: AppMetrics.radius(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -624,7 +629,7 @@ class _DownloadPillWidgetState extends State<DownloadPillWidget> {
               task.fileName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: IosColors.label,
                 fontSize: 13.5,
                 fontWeight: FontWeight.w500,
@@ -677,7 +682,7 @@ class _RingPainter extends CustomPainter {
     final track = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
-      ..color = const Color(0x33FFFFFF);
+      ..color = IosColors.overlay(0x33);
     canvas.drawArc(arcRect, 0, math.pi * 2, false, track);
 
     if (progress <= 0) return;

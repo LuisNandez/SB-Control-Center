@@ -30,6 +30,8 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'services/cover_service.dart';
+
 // ---------------------------------------------------------------------------
 // RESPALDO: reducción en un isolate con el paquete `image`
 // ---------------------------------------------------------------------------
@@ -259,6 +261,15 @@ class ThumbnailService {
     }
   }
 
+  /// Ruta de cwebp.exe (null si no hay). Lo usa CoverService.
+  Future<File?> getCwebp() async {
+    if (!_isInitialized) await initialize();
+    return _cwebpExe;
+  }
+
+  /// Ejecuta [task] respetando el límite de trabajos pesados simultáneos.
+  Future<T> runLimited<T>(Future<T> Function() task) => _gate.run(task);
+
   // -------------------------------------------------------------------------
   // CACHÉ EN MEMORIA (LRU)
   // -------------------------------------------------------------------------
@@ -281,10 +292,26 @@ class ThumbnailService {
 
   void clearMemoryCache() => _memoryCache.clear();
 
+  /// Se incrementa cada vez que se rehacen las miniaturas de una portada
+  /// (card/detail). Las tarjetas que la muestran lo escuchan para volver a
+  /// resolver su imagen si el archivo que tenían ya no existe.
+  final ValueNotifier<int> coverRevision = ValueNotifier<int>(0);
+
+  /// Olvida las miniaturas recordadas en memoria que viven dentro de
+  /// [dirPath] (p. ej. `<mod>/nexus_cover`): al regenerarlas pueden haber
+  /// cambiado de nombre (card.jpg -> card.webp) y la ruta recordada ya no
+  /// existiría. Avisa a las tarjetas abiertas.
+  void forgetFilesIn(String dirPath) {
+    _memoryCache.removeWhere((_, f) => p.isWithin(dirPath, f.path));
+    coverRevision.value++;
+  }
+
   /// true si [file] es una miniatura generada por este servicio. Si no lo es
   /// (p. ej. cuando falló la reducción y se muestra el original) conviene
   /// decodificarla a un tamaño reducido para no gastar RAM.
   bool isGeneratedThumbnail(File file) {
+    // card.webp / detail.webp de <mod>/nexus_cover/: ya vienen a su tamaño.
+    if (CoverService.isCoverThumbPath(file.path)) return true;
     final dir = _thumbnailCacheDir;
     return dir != null && p.isWithin(dir.path, file.path);
   }
@@ -322,6 +349,20 @@ class ThumbnailService {
   }) async {
     if (!_isInitialized) await initialize();
     if (_thumbnailCacheDir == null) return null;
+
+    // Portadas guardadas en <mod>/nexus_cover/: su miniatura de tarjeta
+    // (card.webp) vive junto al original. Si ya está al día se usa tal cual; si
+    // falta (mod anterior a esto) o es de otra portada, se genera una vez.
+    if (isLocalFile && CoverService.isCoverOriginalPath(sourcePath)) {
+      final File original = File(sourcePath);
+      File? card = await CoverService.readyCard(original);
+      card ??= await _gate.run(() => CoverService.cardFor(original));
+      if (card != null) {
+        _remember(cacheKey, card);
+        return card;
+      }
+      // Si no se pudo, sigue el camino de siempre (caché en thumbnail_cache).
+    }
 
     final String hash = _hash(cacheKey);
 

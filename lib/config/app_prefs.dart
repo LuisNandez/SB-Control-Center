@@ -2,6 +2,17 @@
 
 class AppPrefs {
   static const String languageCode = 'languageCode';
+  /// Tema de colores elegido (nombre de [AppThemeId]: system, dark, midnight, light...).
+  static const String themeId = 'themeId';
+  /// Diseño de la interfaz elegido (nombre de [AppLayoutId]: ios, material,
+  /// minimal; en la interfaz se llaman Estilo macOS, Material y Plano).
+  static const String layoutId = 'layoutId';
+  /// Ajustes → "Usar la tarjeta gráfica": pide a Windows que ejecute la app con
+  /// la GPU de alto rendimiento (por defecto: desactivada).
+  static const String useGpuAcceleration = 'useGpuAcceleration';
+  /// Datos que tenía la entrada de GPU de Windows para esta app ANTES de activar
+  /// la opción anterior (se restauran al desactivarla; ausente = no había).
+  static const String gpuPreviousPreference = 'gpuPreviousPreference';
   static const String gameRootPath = 'gameRootPath';
   static const String sevenZipPath = 'sevenZipPath';
   static const String nexusApiKey = 'nexusApiKey';

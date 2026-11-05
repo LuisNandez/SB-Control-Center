@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import '../theme/minimal_style.dart';
 import 'package:path/path.dart' as p;
 import '../../models/mod_info.dart';
 import '../../l10n/app_localizations.dart';
 import '../../thumbnail_service.dart';
+import '../theme/app_layout.dart';
 import '../theme/ios_theme.dart';
 import 'mod_image_widgets.dart';
 import 'animated_mod_switch.dart';
 import 'ios_widgets.dart';
+import 'material_layout_widgets.dart';
 import 'package:hugeicons/hugeicons.dart';
+import '../theme/app_metrics.dart';
 
 class ModGridCard extends StatefulWidget {
   final ModInfo modInfo;
@@ -95,7 +99,7 @@ class _ModGridCardState extends State<ModGridCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOut,
-          color: Colors.white.withOpacity(alpha),
+          color: IosColors.tint(alpha),
         ),
       ),
     );
@@ -106,9 +110,9 @@ class _ModGridCardState extends State<ModGridCard> {
   Widget _overlayPill(String text, Color dot) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
+      decoration: MinimalStyle.on ? BoxDecoration(color: Colors.black.withOpacity(0.58), borderRadius: AppMetrics.radius(20), border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
         color: Colors.black.withOpacity(0.58),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppMetrics.radius(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -116,7 +120,7 @@ class _ModGridCardState extends State<ModGridCard> {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            decoration: MinimalStyle.on ? BoxDecoration(color: dot, borderRadius: BorderRadius.circular(8), border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(color: dot, shape: BoxShape.circle),
           ),
           const SizedBox(width: 5),
           Text(
@@ -131,6 +135,30 @@ class _ModGridCardState extends State<ModGridCard> {
         ],
       ),
     );
+  }
+
+  /// Colores fijos de las insignias del diseño Material. Misma luminosidad y
+  /// croma en los 8 tipos (OKLCH L≈0.5): matices bien separados y texto blanco
+  /// con contraste ≥ 5:1 en cualquier tema.
+  Color _mdTypeColor(String? modType) {
+    switch (modType) {
+      case 'replacement':
+        return const Color(0xFF9A3289);
+      case 'genericPak':
+        return const Color(0xFF626975);
+      case 'movies':
+        return const Color(0xFFBE222A);
+      case 'logicMod':
+        return const Color(0xFF145EC1);
+      case 'save':
+        return const Color(0xFF0A7E3A);
+      case 'config':
+        return const Color(0xFF007984);
+      case 'splash':
+        return const Color(0xFFAB5900);
+      default: // CNS
+        return const Color(0xFF6D47B8);
+    }
   }
 
   Widget _buildModTypeBadge() {
@@ -164,6 +192,9 @@ class _ModGridCardState extends State<ModGridCard> {
       text = l10n.modTypeCNS;
       dot = IosColors.teal;
     }
+    if (AppLayouts.isMaterial) {
+      return MdBadge(text: text, color: _mdTypeColor(modType));
+    }
     return _overlayPill(text, dot);
   }
 
@@ -190,6 +221,8 @@ class _ModGridCardState extends State<ModGridCard> {
     final modInfo = widget.modInfo;
     final l10n = widget.l10n;
     final updateInfo = widget.updateInfo;
+    final bool md = AppLayouts.isMaterial;
+    final bool u = AppMetrics.u;
 
     String? coverImagePath;
     String? cacheKey;
@@ -223,7 +256,9 @@ class _ModGridCardState extends State<ModGridCard> {
     final bool hasRing = showUpdate || widget.isHighlighted;
     final Color ringColor = showUpdate
         ? IosColors.yellow
-        : (widget.isHighlighted ? IosColors.blue : const Color(0x14FFFFFF));
+        : (widget.isHighlighted
+            ? IosColors.blue
+            : (md ? Colors.transparent : IosColors.overlay(0x14)));
 
     String? updateVersionText;
     if (showUpdate) {
@@ -236,27 +271,27 @@ class _ModGridCardState extends State<ModGridCard> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedScale(
-        scale: _hover ? 1.015 : 1.0,
+        scale: MinimalStyle.on ? 1.0 : (_hover ? 1.015 : 1.0),
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOut,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: IosColors.card,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(_hover ? 0.45 : 0.25),
-                blurRadius: _hover ? 22 : 10,
-                offset: Offset(0, _hover ? 10 : 4),
-              ),
-            ],
-          ),
+          decoration: MinimalStyle.on ? MinimalStyle.panel(hovered: _hover) : BoxDecoration(
+                  color: IosColors.card,
+                  borderRadius: AppMetrics.radius(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(_hover ? 0.45 : 0.25),
+                      blurRadius: _hover ? 22 : 10,
+                      offset: Offset(0, _hover ? 10 : 4),
+                    ),
+                  ],
+                ),
           // El aro va por encima y no altera el tamaño del contenido.
           foregroundDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppMetrics.radius(14),
             border: Border.all(color: ringColor, width: hasRing ? 1.5 : 0.5),
           ),
           // Material local: los InkWell internos (versión, etiqueta, botones)
@@ -307,7 +342,16 @@ class _ModGridCardState extends State<ModGridCard> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             if (!modInfo.isEnabled)
-                              _overlayPill(l10n.modDisabledBadge, IosColors.orange),
+                              md
+                                  ? MdBadge(
+                                      text: l10n.modDisabledBadge,
+                                      color: const Color(0xFFF9AD26),
+                                      textColor: Colors.black87,
+                                    )
+                                  : _overlayPill(
+                                      l10n.modDisabledBadge,
+                                      IosColors.orange,
+                                    ),
                             if (!modInfo.isEnabled && widget.showModTypeTags)
                               const SizedBox(height: 4),
                             if (widget.showModTypeTags) _buildModTypeBadge(),
@@ -342,7 +386,12 @@ class _ModGridCardState extends State<ModGridCard> {
 
               // ---------- INFORMACIÓN ----------
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                padding: MinimalStyle.on
+                    ? const EdgeInsets.fromLTRB(14, 12, 14, 0)
+                    : u
+                    ? const EdgeInsets.fromLTRB(
+                        AppMetrics.cardPadding, 12, AppMetrics.cardPadding, 0)
+                    : const EdgeInsets.fromLTRB(12, 10, 12, 0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
@@ -352,10 +401,10 @@ class _ModGridCardState extends State<ModGridCard> {
                         message: modInfo.customName,
                         child: Text(
                           modInfo.customName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13.5,
-                            letterSpacing: -0.2,
+                          style: TextStyle(
+                            fontWeight: u ? FontWeight.w700 : FontWeight.w600,
+                            fontSize: MinimalStyle.on ? 14 : (u ? 15 : 13.5),
+                            letterSpacing: u ? 0 : -0.2,
                             color: IosColors.label,
                           ),
                           maxLines: 1,
@@ -371,7 +420,7 @@ class _ModGridCardState extends State<ModGridCard> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.layers_rounded,
                                 size: 12,
                                 color: IosColors.purple,
@@ -379,7 +428,7 @@ class _ModGridCardState extends State<ModGridCard> {
                               const SizedBox(width: 2),
                               Text(
                                 '${widget.editionCount}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w600,
                                   color: IosColors.purple,
@@ -392,14 +441,16 @@ class _ModGridCardState extends State<ModGridCard> {
                     if (displayVersion != null)
                       InkWell(
                         onTap: widget.onEditVersionTap,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: AppMetrics.radius(4),
                         child: Padding(
                           padding: const EdgeInsets.only(left: 6),
                           child: Text(
                             'v$displayVersion',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: IosColors.secondaryLabel,
+                            style: TextStyle(
+                              fontSize: u ? 12.5 : 11,
+                              color: md && !MinimalStyle.on
+                                  ? IosColors.blue
+                                  : IosColors.secondaryLabel,
                             ),
                           ),
                         ),
@@ -408,7 +459,11 @@ class _ModGridCardState extends State<ModGridCard> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+                padding: MinimalStyle.on
+                    ? const EdgeInsets.fromLTRB(14, 8, 8, 10)
+                    : u
+                    ? const EdgeInsets.fromLTRB(AppMetrics.cardPadding, 8, 8, 12)
+                    : const EdgeInsets.fromLTRB(12, 6, 4, 6),
                 child: Row(
                   children: [
                     Expanded(
@@ -425,14 +480,17 @@ class _ModGridCardState extends State<ModGridCard> {
                             onExit: (_) => widget.onHoverExit(),
                             child: InkWell(
                               onTap: isReplacement ? null : widget.onEditTagTap,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(md ? 7 : 20),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: IosColors.chip,
-                                  borderRadius: BorderRadius.circular(20),
+                                constraints: mdChipConstraints,
+                                padding: u
+                                    ? const EdgeInsets.symmetric(horizontal: 10)
+                                    : const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                                decoration: MinimalStyle.on ? BoxDecoration(color: MinimalStyle.mutedFill, borderRadius: BorderRadius.circular(4)) : BoxDecoration(
+                                  color: md ? IosColors.overlay(0x24) : IosColors.chip,
+                                  borderRadius: BorderRadius.circular(md ? 7 : 20),
                                 ),
-                                child: Row(
+                                child: mdChipChild(Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     if (isReplacement) ...[
@@ -446,8 +504,8 @@ class _ModGridCardState extends State<ModGridCard> {
                                     Flexible(
                                       child: Text(
                                         displayTag,
-                                        style: const TextStyle(
-                                          fontSize: 10.5,
+                                        style: TextStyle(
+                                          fontSize: u ? 12 : 10.5,
                                           color: IosColors.secondaryLabel,
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -455,28 +513,29 @@ class _ModGridCardState extends State<ModGridCard> {
                                       ),
                                     ),
                                   ],
-                                ),
+                                )),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: u ? 8 : 4),
                     AnimatedModSwitch(
                       key: ValueKey('switch-grid-${modInfo.directory.path}'),
                       modInfo: modInfo,
                       isLoading: widget.isLoading,
                       onEnable: widget.onEnable,
                       onDisable: widget.onDisable,
+                      // Con Material el interruptor siempre mide 52x32.
                       scale: 0.66,
                     ),
                     IosMenuButton<String>(
                       width: 28,
                       height: 28,
-                      icon: const Icon(
-                        Icons.more_horiz_rounded,
-                        size: 18,
+                      icon: Icon(
+                        md ? Icons.more_vert_rounded : Icons.more_horiz_rounded,
+                        size: u ? 20 : 18,
                         color: IosColors.icon,
                       ),
                       onSelected: (value) {

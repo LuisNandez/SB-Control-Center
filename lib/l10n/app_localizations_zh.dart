@@ -29,6 +29,98 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLanguageDesc => '选择应用程序语言';
 
   @override
+  String get settingsTheme => '主题';
+
+  @override
+  String get settingsThemeDesc => '选择应用的外观。“自动”将跟随系统的浅色或深色模式。';
+
+  @override
+  String get themeSystem => '自动';
+
+  @override
+  String get themeDark => '深色';
+
+  @override
+  String get themeMidnight => '午夜';
+
+  @override
+  String get themeLight => '浅色';
+
+  @override
+  String get themeOcean => '海洋';
+
+  @override
+  String get themeForest => '森林';
+
+  @override
+  String get themeViolet => '紫罗兰';
+
+  @override
+  String get themeSand => '沙色';
+
+  @override
+  String get themeCocoa => '可可';
+
+  @override
+  String get settingsAppearance => '外观';
+
+  @override
+  String get settingsLayout => '布局';
+
+  @override
+  String get settingsLayoutDesc =>
+      '选择主窗口的布局：macOS 风格（半透明、圆角）、卡片更大的 Material，或扁平（简洁、细线条）。立即生效。';
+
+  @override
+  String get layoutMacos => 'macOS 风格';
+
+  @override
+  String get layoutMaterial => 'Material';
+
+  @override
+  String get layoutFlat => '扁平';
+
+  @override
+  String get settingsGpuAccel => '使用显卡';
+
+  @override
+  String get settingsGpuAccelDesc => '如果电脑有独立显卡，则优先使用';
+
+  @override
+  String get settingsGpuAccelFooter =>
+      '请求 Windows 使用高性能显卡运行本应用，适用于同时配备集成显卡和独立显卡的笔记本电脑。如果电脑只有一块显卡，则不会有任何变化。重启应用后生效。';
+
+  @override
+  String get settingsGpuAccelRestart => '重启应用以应用更改';
+
+  @override
+  String get settingsGpuAccelFailed => '无法更改 Windows 的显卡偏好设置';
+
+  @override
+  String get settingsGpuAccelSingle => '此电脑只有一块显卡';
+
+  @override
+  String get settingsGpuRestartTitle => '立即重启？';
+
+  @override
+  String get settingsGpuRestartMsg => '为应用显卡更改，应用将关闭并自动重新打开。';
+
+  @override
+  String get settingsGpuRestartNow => '立即重启';
+
+  @override
+  String get settingsGpuRestartLater => '稍后';
+
+  @override
+  String get ecoModeTitle => '节能模式';
+
+  @override
+  String get ecoModeMessage => 'Stellar Blade 正在运行。应用将尽量减少资源占用，关闭游戏后会自动恢复正常。';
+
+  @override
+  String get ecoModeShowApp => '仍然显示应用';
+
+  @override
   String get settingsAbout => '关于';
 
   @override
@@ -1129,89 +1221,105 @@ class AppLocalizationsZh extends AppLocalizations {
   String get devSelfUpdateRestarting => '正在重启…';
 
   @override
-  String get appUpdateAvailableTitle => 'Update available';
+  String get appUpdateAvailableTitle => '有可用更新';
 
   @override
-  String get appUpdateAvailableMsg =>
-      'The app will download the update, install it and restart automatically.';
+  String get appUpdateAvailableMsg => '应用将下载并安装更新，然后自动重启。';
 
   @override
-  String get appUpdateInstalledLabel => 'INSTALLED';
+  String get appUpdateInstalledLabel => '已安装';
 
   @override
-  String get appUpdateAvailableLabel => 'AVAILABLE';
+  String get appUpdateAvailableLabel => '可用';
 
   @override
   String appUpdateDownloadSize(String size) {
-    return 'Download size: $size';
+    return '下载大小：$size';
   }
 
   @override
-  String get appUpdateNow => 'Update now';
+  String get appUpdateNow => '立即更新';
 
   @override
-  String get appUpdateLater => 'Later';
+  String get appUpdateLater => '稍后';
 
   @override
-  String get appUpdateSkip => 'Skip this version';
+  String get appUpdateSkip => '跳过此版本';
 
   @override
-  String get appUpdateDownloading => 'Downloading update…';
+  String get appUpdateDownloading => '正在下载更新…';
 
   @override
-  String get appUpdateUpToDate => 'You already have the latest version';
+  String get appUpdateUpToDate => '你已是最新版本';
 
   @override
-  String get appUpdateCheckFailed => 'Could not check for updates';
+  String get appUpdateCheckFailed => '无法检查更新';
 
   @override
-  String get settingsCheckAppUpdate => 'Check for app updates';
+  String get settingsCheckAppUpdate => '检查应用更新';
 
   @override
   String get settingsCheckAppUpdateDesc =>
-      'Look for a new version of SB Control Center on GitHub';
+      '在 GitHub 上查找 SB Control Center 的新版本';
 
   @override
-  String get settingsChangelog => 'Changelog';
+  String get settingsChangelog => '更新日志';
 
   @override
-  String get settingsChangelogDesc => 'See what\'s new in each version';
+  String get settingsChangelogDesc => '查看每个版本的新内容';
 
   @override
   String changelogWhatsNewTitle(String version) {
-    return 'What\'s new in $version';
+    return '$version 的新内容';
   }
 
   @override
-  String get changelogUpdatedSubtitle =>
-      'SB Control Center was updated successfully';
+  String get changelogUpdatedSubtitle => 'SB Control Center 已成功更新';
 
   @override
-  String get changelogHistoryTitle => 'Changelog';
+  String get changelogHistoryTitle => '更新日志';
 
   @override
   String changelogInstalledVersion(String version) {
-    return 'Installed version: $version';
+    return '已安装版本：$version';
   }
 
   @override
-  String get changelogInstalledBadge => 'Installed';
+  String get changelogInstalledBadge => '已安装';
 
   @override
-  String get changelogPrereleaseBadge => 'Pre-release';
+  String get changelogPrereleaseBadge => '预发布';
 
   @override
-  String get changelogEmpty => 'This release has no notes.';
+  String get changelogEmpty => '此版本没有说明。';
 
   @override
-  String get changelogViewOnGithub => 'View on GitHub';
+  String get changelogViewOnGithub => '在 GitHub 上查看';
 
   @override
-  String get changelogLoadFailed =>
-      'Could not load the changelog. Check your connection.';
+  String get changelogLoadFailed => '无法加载更新日志。请检查你的网络连接。';
 
   @override
-  String get changelogRetry => 'Retry';
+  String get changelogRetry => '重试';
+
+  @override
+  String get settingsSkippedAppVersion => '已跳过的应用更新';
+
+  @override
+  String settingsSkippedAppVersionDesc(String version) {
+    return '版本 $version 已隐藏。点按即可重新接收该版本的通知。';
+  }
+
+  @override
+  String appUpdateSkippedTitle(String version) {
+    return '已跳过版本 $version';
+  }
+
+  @override
+  String get appUpdateSkippedDesc => '你可以在 设置 › 连接与更新 中撤销。';
+
+  @override
+  String get appUpdateUnskippedTitle => '你将再次收到应用更新通知';
 
   @override
   String get devExtractNoData => '未找到具有有效标识符的模组可供提取。';

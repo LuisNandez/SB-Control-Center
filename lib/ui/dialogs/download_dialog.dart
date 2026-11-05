@@ -153,14 +153,14 @@ class _DownloadModDialogState extends State<DownloadModDialog> {
                 children: [
                   Text(
                     _downloaded,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       color: IosColors.secondaryLabel,
                     ),
                   ),
                   Text(
                     _speed,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       color: IosColors.secondaryLabel,
                     ),

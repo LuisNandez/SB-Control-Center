@@ -29,6 +29,99 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsLanguageDesc => 'アプリケーションの言語を選択してください';
 
   @override
+  String get settingsTheme => 'テーマ';
+
+  @override
+  String get settingsThemeDesc => 'アプリの外観を選択します。「自動」はシステムのライト/ダークモードに従います。';
+
+  @override
+  String get themeSystem => '自動';
+
+  @override
+  String get themeDark => 'ダーク';
+
+  @override
+  String get themeMidnight => 'ミッドナイト';
+
+  @override
+  String get themeLight => 'ライト';
+
+  @override
+  String get themeOcean => 'オーシャン';
+
+  @override
+  String get themeForest => 'フォレスト';
+
+  @override
+  String get themeViolet => 'バイオレット';
+
+  @override
+  String get themeSand => 'サンド';
+
+  @override
+  String get themeCocoa => 'ココア';
+
+  @override
+  String get settingsAppearance => '外観';
+
+  @override
+  String get settingsLayout => 'レイアウト';
+
+  @override
+  String get settingsLayoutDesc =>
+      'メインウィンドウのレイアウトを選択します。macOSスタイル（半透明で丸みのある見た目）、大きめのカードのMaterial、またはフラット（すっきりした細い線）。すぐに反映されます。';
+
+  @override
+  String get layoutMacos => 'macOSスタイル';
+
+  @override
+  String get layoutMaterial => 'Material';
+
+  @override
+  String get layoutFlat => 'フラット';
+
+  @override
+  String get settingsGpuAccel => 'グラフィックカードを使用';
+
+  @override
+  String get settingsGpuAccelDesc => '搭載されている場合は専用GPUを優先します';
+
+  @override
+  String get settingsGpuAccelFooter =>
+      'Windowsに、高パフォーマンスのグラフィックカードでアプリを実行するよう指示します。内蔵GPUと専用GPUを搭載したノートPCで有効です。グラフィックカードが1つだけの場合は何も変わりません。アプリの再起動後に反映されます。';
+
+  @override
+  String get settingsGpuAccelRestart => '変更を反映するにはアプリを再起動してください';
+
+  @override
+  String get settingsGpuAccelFailed => 'Windowsのグラフィック設定を変更できませんでした';
+
+  @override
+  String get settingsGpuAccelSingle => 'このPCにはグラフィックカードが1つしかありません';
+
+  @override
+  String get settingsGpuRestartTitle => '今すぐ再起動しますか？';
+
+  @override
+  String get settingsGpuRestartMsg => 'グラフィックの変更を反映するため、アプリを閉じて自動的に開き直します。';
+
+  @override
+  String get settingsGpuRestartNow => '今すぐ再起動';
+
+  @override
+  String get settingsGpuRestartLater => '後で';
+
+  @override
+  String get ecoModeTitle => '省電力モード';
+
+  @override
+  String get ecoModeMessage =>
+      'Stellar Bladeを実行中です。アプリは使用するリソースを最小限に抑え、ゲームを終了すると自動的に通常の状態に戻ります。';
+
+  @override
+  String get ecoModeShowApp => 'それでもアプリを表示';
+
+  @override
   String get settingsAbout => '概要';
 
   @override
@@ -1144,89 +1237,105 @@ class AppLocalizationsJa extends AppLocalizations {
   String get devSelfUpdateRestarting => '再起動中…';
 
   @override
-  String get appUpdateAvailableTitle => 'Update available';
+  String get appUpdateAvailableTitle => 'アップデートがあります';
 
   @override
-  String get appUpdateAvailableMsg =>
-      'The app will download the update, install it and restart automatically.';
+  String get appUpdateAvailableMsg => 'アプリがアップデートをダウンロードしてインストールし、自動的に再起動します。';
 
   @override
-  String get appUpdateInstalledLabel => 'INSTALLED';
+  String get appUpdateInstalledLabel => 'インストール済み';
 
   @override
-  String get appUpdateAvailableLabel => 'AVAILABLE';
+  String get appUpdateAvailableLabel => '利用可能';
 
   @override
   String appUpdateDownloadSize(String size) {
-    return 'Download size: $size';
+    return 'ダウンロードサイズ: $size';
   }
 
   @override
-  String get appUpdateNow => 'Update now';
+  String get appUpdateNow => '今すぐアップデート';
 
   @override
-  String get appUpdateLater => 'Later';
+  String get appUpdateLater => '後で';
 
   @override
-  String get appUpdateSkip => 'Skip this version';
+  String get appUpdateSkip => 'このバージョンをスキップ';
 
   @override
-  String get appUpdateDownloading => 'Downloading update…';
+  String get appUpdateDownloading => 'アップデートをダウンロード中…';
 
   @override
-  String get appUpdateUpToDate => 'You already have the latest version';
+  String get appUpdateUpToDate => 'すでに最新バージョンです';
 
   @override
-  String get appUpdateCheckFailed => 'Could not check for updates';
+  String get appUpdateCheckFailed => 'アップデートを確認できませんでした';
 
   @override
-  String get settingsCheckAppUpdate => 'Check for app updates';
+  String get settingsCheckAppUpdate => 'アプリのアップデートを確認';
 
   @override
   String get settingsCheckAppUpdateDesc =>
-      'Look for a new version of SB Control Center on GitHub';
+      'GitHubでSB Control Centerの新しいバージョンを確認します';
 
   @override
-  String get settingsChangelog => 'Changelog';
+  String get settingsChangelog => '変更履歴';
 
   @override
-  String get settingsChangelogDesc => 'See what\'s new in each version';
+  String get settingsChangelogDesc => '各バージョンの新機能を確認します';
 
   @override
   String changelogWhatsNewTitle(String version) {
-    return 'What\'s new in $version';
+    return '$versionの新機能';
   }
 
   @override
-  String get changelogUpdatedSubtitle =>
-      'SB Control Center was updated successfully';
+  String get changelogUpdatedSubtitle => 'SB Control Centerを正常にアップデートしました';
 
   @override
-  String get changelogHistoryTitle => 'Changelog';
+  String get changelogHistoryTitle => '変更履歴';
 
   @override
   String changelogInstalledVersion(String version) {
-    return 'Installed version: $version';
+    return 'インストール済みのバージョン: $version';
   }
 
   @override
-  String get changelogInstalledBadge => 'Installed';
+  String get changelogInstalledBadge => 'インストール済み';
 
   @override
-  String get changelogPrereleaseBadge => 'Pre-release';
+  String get changelogPrereleaseBadge => 'プレリリース';
 
   @override
-  String get changelogEmpty => 'This release has no notes.';
+  String get changelogEmpty => 'このリリースにはノートがありません。';
 
   @override
-  String get changelogViewOnGithub => 'View on GitHub';
+  String get changelogViewOnGithub => 'GitHubで見る';
 
   @override
-  String get changelogLoadFailed =>
-      'Could not load the changelog. Check your connection.';
+  String get changelogLoadFailed => '変更履歴を読み込めませんでした。接続を確認してください。';
 
   @override
-  String get changelogRetry => 'Retry';
+  String get changelogRetry => '再試行';
+
+  @override
+  String get settingsSkippedAppVersion => 'スキップしたアプリのアップデート';
+
+  @override
+  String settingsSkippedAppVersionDesc(String version) {
+    return 'バージョン$versionは非表示になっています。タップすると再び通知されます。';
+  }
+
+  @override
+  String appUpdateSkippedTitle(String version) {
+    return 'バージョン$versionをスキップしました';
+  }
+
+  @override
+  String get appUpdateSkippedDesc => '「設定 › 接続とアップデート」で元に戻せます。';
+
+  @override
+  String get appUpdateUnskippedTitle => '今後はアプリのアップデートが再び通知されます';
 
   @override
   String get devExtractNoData => '抽出する有効な識別子を持つMODが見つかりませんでした。';

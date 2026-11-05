@@ -358,7 +358,7 @@ class _IosCollapsibleState extends State<IosCollapsible> {
                   children: [
                     Text(
                       _expanded ? widget.lessLabel : widget.moreLabel,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.1,
@@ -370,7 +370,7 @@ class _IosCollapsibleState extends State<IosCollapsible> {
                       turns: _expanded ? 0.5 : 0.0,
                       duration: const Duration(milliseconds: 300),
                       curve: IosMotion.sheet,
-                      child: const Icon(
+                      child: Icon(
                         Icons.expand_more_rounded,
                         size: 18,
                         color: IosColors.blue,

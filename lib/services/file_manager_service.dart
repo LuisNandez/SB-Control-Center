@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 
+import 'cover_service.dart';
+
 class FileManagerService {
   /// Prefijos de las carpetas temporales que crea la app en %TEMP%.
   static const List<String> tempDirPrefixes = [
@@ -123,15 +125,25 @@ class FileManagerService {
   static Future<void> cleanOldCustomCovers(Directory dir) async {
     try {
       if (!await dir.exists()) return;
-      
-      await for (final entity in dir.list(recursive: false)) {
-        if (entity is File) {
-          final filename = p.basename(entity.path).toLowerCase();
-          // Elimina cualquier archivo que empiece con '_custom_cover.' 
-          // (cubre .jpg, .png, .webp, etc.)
-          if (filename.startsWith('_custom_cover.')) {
-            await entity.delete();
-            print('🗑️ Portada anterior eliminada: ${entity.path}');
+
+      // Se limpian la raíz del mod (versiones anteriores) y la carpeta
+      // nexus_cover. Solo se borran los ORIGINALES personalizados; las
+      // miniaturas (card/detail) se rehacen al guardar la portada nueva.
+      final folders = <Directory>[
+        dir,
+        Directory(p.join(dir.path, CoverService.dirName)),
+      ];
+      for (final folder in folders) {
+        if (!await folder.exists()) continue;
+        await for (final entity in folder.list(recursive: false)) {
+          if (entity is File) {
+            final filename = p.basename(entity.path).toLowerCase();
+            // Elimina cualquier archivo que empiece con '_custom_cover.'
+            // (cubre .jpg, .png, .webp, etc.)
+            if (filename.startsWith('_custom_cover.')) {
+              await entity.delete();
+              print('🗑️ Portada anterior eliminada: ${entity.path}');
+            }
           }
         }
       }

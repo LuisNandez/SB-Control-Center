@@ -14,7 +14,9 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:toastification/toastification.dart';
+import 'ui/theme/app_metrics.dart';
 import 'ui/theme/ios_theme.dart';
+import 'ui/widgets/ios_widgets.dart' show IosCloseButton;
 
 // Tipos de notificación: cada uno tiene su propio color e icono.
 enum NotificationType { success, info, error, neutral }
@@ -49,7 +51,7 @@ class NotificationService {
           opacity: curved,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: const Offset(0.35, 0),
+              begin: AppMetrics.md ? const Offset(0, 0.35) : const Offset(0.35, 0),
               end: Offset.zero,
             ).animate(curved),
             child: child,
@@ -145,8 +147,90 @@ class _IosBannerState extends State<_IosBanner> {
     }
   }
 
+  /// Notificación del diseño Material: TODAS miden lo mismo (ancho fijo y alto
+  /// mínimo), con superficie sólida, icono plano y botón de cerrar siempre visible.
+  Widget _buildMaterial() {
+    final radius = BorderRadius.circular(AppMetrics.cardRadius);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: 300,
+          maxWidth: AppMetrics.notificationWidth,
+        ),
+        child: MouseRegion(
+          onEnter: (_) => _setHover(true),
+          onExit: (_) => _setHover(false),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: IosColors.elevated,
+              borderRadius: radius,
+              border: Border.all(color: IosColors.overlay(0x1F), width: 1),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x59000000),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _Badge(color: _color, icon: _icon),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.title,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            height: 1.25,
+                            color: IosColors.label,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                        if (widget.description != null &&
+                            widget.description!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.description!,
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w400,
+                              height: 1.3,
+                              color: IosColors.secondaryLabel,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  IosCloseButton(onPressed: widget.onDismiss),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (AppMetrics.md) return _buildMaterial();
     final radius = BorderRadius.circular(18);
 
     return Padding(
@@ -178,10 +262,10 @@ class _IosBannerState extends State<_IosBanner> {
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xCC2C2C2E), // material "thick" oscuro
+                      color: IosColors.card.withAlpha(0xCC), // material "thick" oscuro
                       borderRadius: radius,
                       border: Border.all(
-                        color: const Color(0x24FFFFFF),
+                        color: IosColors.overlay(0x24),
                         width: 0.5,
                       ),
                     ),
@@ -199,7 +283,7 @@ class _IosBannerState extends State<_IosBanner> {
                                 widget.title,
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: -0.1,
@@ -215,7 +299,7 @@ class _IosBannerState extends State<_IosBanner> {
                                   widget.description!,
                                   maxLines: 4,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w400,
                                     letterSpacing: -0.05,
@@ -237,11 +321,11 @@ class _IosBannerState extends State<_IosBanner> {
                             child: Container(
                               width: 18,
                               height: 18,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: IosColors.fill,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.close_rounded,
                                 size: 12,
                                 color: IosColors.secondaryLabel,
@@ -272,6 +356,18 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppMetrics.md) {
+      return Container(
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppMetrics.controlRadius),
+          color: color,
+        ),
+        child: Icon(icon, size: 21, color: Colors.white),
+      );
+    }
     return Container(
       width: 36,
       height: 36,

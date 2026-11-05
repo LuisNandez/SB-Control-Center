@@ -2,7 +2,9 @@
 import 'package:flutter/cupertino.dart' show CupertinoSwitch;
 import 'package:flutter/material.dart';
 import '../../models/mod_info.dart';
+import '../theme/app_layout.dart';
 import '../theme/ios_theme.dart';
+import 'material_layout_widgets.dart';
 
 /// Interruptor estilo iOS que maneja su propio estado de animación localmente
 /// para permitir una transición visual suave (deslizamiento) al cambiar,
@@ -79,6 +81,15 @@ class _AnimatedModSwitchState extends State<AnimatedModSwitch> {
 
   @override
   Widget build(BuildContext context) {
+    // Diseño Material: el MISMO interruptor (52x32) en tarjetas, lista y
+    // ajustes; el parámetro [scale] solo se usa con el diseño iOS.
+    if (AppLayouts.isMaterial) {
+      return MdSwitch(
+        value: _isEnabled,
+        onChanged: widget.isLoading ? null : _handleChange,
+      );
+    }
+
     final Widget switchWidget = CupertinoSwitch(
       value: _isEnabled,
       activeColor: IosColors.green,

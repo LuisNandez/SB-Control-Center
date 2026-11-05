@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../services/variant_conflict_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../widgets/ios_widgets.dart';
+import '../theme/ios_theme.dart';
+import '../theme/app_metrics.dart';
 
 /// Pregunta qué variante instalar cuando un mismo archivo trae varias que
 /// reemplazan lo mismo. Devuelve los índices (dentro de group.variants) que se
@@ -65,8 +67,8 @@ class _VariantChoiceDialogState extends State<VariantChoiceDialog> {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: const Color(0x14FFFFFF),
-            borderRadius: BorderRadius.circular(10),
+            color: IosColors.overlay(0x14),
+            borderRadius: AppMetrics.radius(10),
           ),
           child: ListView(
             shrinkWrap: true,

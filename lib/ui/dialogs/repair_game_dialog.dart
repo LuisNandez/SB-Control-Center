@@ -162,7 +162,7 @@ class RepairGameDialog {
                     errorText,
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       height: 1.3,
                       color: IosColors.red,
@@ -235,7 +235,7 @@ class _StepRow extends StatelessWidget {
 
     switch (status) {
       case RepairStepStatus.pending:
-        icon = const Icon(
+        icon = Icon(
           Icons.radio_button_unchecked,
           size: 18,
           color: IosColors.tertiaryLabel,
@@ -248,7 +248,7 @@ class _StepRow extends StatelessWidget {
         weight = FontWeight.w600;
         break;
       case RepairStepStatus.done:
-        icon = const Icon(
+        icon = Icon(
           Icons.check_circle_rounded,
           size: 18,
           color: IosColors.green,
@@ -256,7 +256,7 @@ class _StepRow extends StatelessWidget {
         textColor = IosColors.secondaryLabel;
         break;
       case RepairStepStatus.skipped:
-        icon = const Icon(
+        icon = Icon(
           Icons.remove_circle_outline,
           size: 18,
           color: IosColors.gray,
@@ -265,7 +265,7 @@ class _StepRow extends StatelessWidget {
         text = '$label · $skippedLabel';
         break;
       case RepairStepStatus.error:
-        icon = const Icon(
+        icon = Icon(
           Icons.cancel_rounded,
           size: 18,
           color: IosColors.red,

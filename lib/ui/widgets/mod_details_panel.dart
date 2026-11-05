@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 // ignore_for_file: deprecated_member_use
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +15,7 @@ import '../../services/nexus_api_service.dart';
 import '../../services/translation_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../thumbnail_service.dart';
+import '../../services/cover_service.dart';
 import '../../notification_service.dart';
 import '../../utils/text_utils.dart';
 import 'mod_image_widgets.dart';
@@ -23,7 +25,9 @@ import 'ios_motion.dart';
 import 'ios_widgets.dart';
 import 'outfit_picker_sheet.dart';
 import 'smooth_scroll.dart';
-import 'image_viewer.dart' show registerGalleryOrigin, imageViewerActive;
+import 'image_viewer.dart' show registerGalleryOrigin;
+import '../theme/app_metrics.dart';
+import 'material_layout_widgets.dart';
 
 class ModDetailsPanel extends StatefulWidget {
   final ModInfo initialModInfo;
@@ -130,19 +134,18 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   // portada, título y acciones). El resto (resumen, información, descripción
   // BBCode, trajes...) se monta justo cuando termina la animación: así la hoja
   // no compite con el trabajo de construir y pintar todo el contenido.
+  //
+  // Después las secciones se montan UNA A UNA, de arriba hacia abajo, cada una
+  // en su propio fotograma (ver _revealSections / _StageGate): nunca hay un
+  // fotograma que construya todo el contenido de golpe.
   bool _contentReady = false;
   bool _transitionHooked = false;
+
+  /// Cuántas secciones "tardías" ya se pueden montar (0 = ninguna).
+  final ValueNotifier<int> _stage = ValueNotifier<int>(0);
+  static const int _lastStage = 6;
   Animation<double>? _routeAnimation;
   Timer? _readyFallback;
-
-  // ---- Cristal que se activa al final ---------------------------------------
-  // El desenfoque (blur 40) sobre casi toda la pantalla es lo más caro de
-  // pintar: repetirlo en cada fotograma mientras la hoja sube y se monta el
-  // contenido es lo que hacía lenta la apertura. Por eso la hoja sube con un
-  // fondo casi opaco y SIN desenfoque, y el cristal se activa (con un fundido
-  // de color) cuando ya terminó la animación y la cascada de secciones.
-  final ValueNotifier<bool> _glassSettled = ValueNotifier<bool>(false);
-  Timer? _glassTimer;
 
   @override
   void initState() {
@@ -187,31 +190,76 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     if (_contentReady || !mounted) return;
     _routeAnimation?.removeStatusListener(_onRouteStatus);
     _readyFallback?.cancel();
+    // Primer paso (ligero): empieza a cargar la portada a tamaño completo.
     setState(() => _contentReady = true);
-    _updateTranslationButtonVisibility();
-    _loadEndorseStatus();
-    // La cascada de secciones dura ~0,8 s: el cristal entra después.
-    _glassTimer = Timer(const Duration(milliseconds: 900), () {
-      if (mounted) _glassSettled.value = true;
-    });
+    _revealSections();
   }
 
-  /// Miniatura de la portada que la lista ya tiene en memoria. Se muestra al
-  /// instante mientras llega la imagen a tamaño completo. (La clave es la misma
-  /// que usa ModGridCard.)
-  File? _coverPlaceholder() {
-    final ModInfo mod = currentModInfo;
-    String? key;
-    if (mod.customCoverPath != null && mod.customCoverPath!.isNotEmpty) {
-      key = p.basename(mod.directory.path) + mod.customCoverPath!;
-      if (mod.customCoverLastModified != null) {
-        key += mod.customCoverLastModified!.millisecondsSinceEpoch.toString();
-      }
-    } else if (mod.gallery != null && mod.gallery!.isNotEmpty) {
-      key = mod.gallery!.first['thumbnail'] as String?;
+  /// Monta las secciones restantes de arriba hacia abajo: una por fotograma y
+  /// con un respiro entre ellas, para que la hoja y el scroll no se resientan.
+  /// El trabajo no visual (traducción, endorse) va al final.
+  Future<void> _revealSections() async {
+    // Deja pasar un fotograma para que la portada empiece a decodificarse.
+    await WidgetsBinding.instance.endOfFrame;
+    for (int i = 1; i <= _lastStage; i++) {
+      if (!mounted) return;
+      _stage.value = i;
+      // Espera a que ese fotograma se construya y pinte...
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      // ...y deja un pequeño margen antes de la siguiente sección.
+      await Future<void>.delayed(const Duration(milliseconds: 40));
     }
-    if (key == null) return null;
-    return widget.thumbnailService.getFromMemoryCache(key);
+    if (!mounted) return;
+    _updateTranslationButtonVisibility();
+    _loadEndorseStatus();
+  }
+
+  // ---- Imagen de portada del panel -----------------------------------------
+  // Se muestra SIEMPRE `nexus_cover/detail.webp` (ya reducida y optimizada):
+  // sin miniatura borrosa de fondo ni carga diferida. Si el mod todavía no la
+  // tiene, se genera (rápido con cwebp) y no se enseña nada hasta que esté
+  // lista; el original pesado solo se usa si la generación falla.
+  String? _coverResolvedKey;
+  String? _coverResolvedPath;
+
+  /// Trabajos de generación de `detail` por ruta de original (true = terminó).
+  final Map<String, bool> _detailJobs = {};
+
+  String? _coverDisplayPath() {
+    final ModInfo mod = currentModInfo;
+    final String original = p.join(mod.directory.path, mod.customCoverPath!);
+    final String key =
+        '$original|${mod.customCoverLastModified?.millisecondsSinceEpoch}';
+    if (key == _coverResolvedKey && _coverResolvedPath != null) {
+      return _coverResolvedPath!;
+    }
+
+    String shown = original;
+    if (CoverService.isCoverOriginalPath(original)) {
+      final File? detail = CoverService.detailFileSync(File(original));
+      if (detail != null) {
+        shown = detail.path;
+      } else {
+        final bool? done = _detailJobs[original];
+        if (done == null) {
+          _detailJobs[original] = false;
+          ThumbnailService()
+              .runLimited(() => CoverService.ensureThumbnails(File(original)))
+              .catchError((Object _) => false)
+              .whenComplete(() {
+            _detailJobs[original] = true;
+            if (mounted) setState(() => _coverResolvedKey = null);
+          });
+          return null; // se está generando: no se enseña el original
+        }
+        if (done == false) return null; // sigue generándose
+        // done == true y aun así no hay detail: falló; se usa el original.
+      }
+    }
+    _coverResolvedKey = key;
+    _coverResolvedPath = shown;
+    return shown;
   }
 
   /// Se llama AUTOMÁTICAMENTE cuando el widget se va a destruir: entrega al
@@ -220,12 +268,11 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
   void dispose() {
     _routeAnimation?.removeStatusListener(_onRouteStatus);
     _readyFallback?.cancel();
-    _glassTimer?.cancel();
-    _glassSettled.dispose();
     widget.onPanelClosed(_needsReloadOnClose ? currentModInfo : null);
     _wheelSmoother.cancel();
     _carouselScrollController.dispose();
     _scrollOffset.dispose();
+    _stage.dispose();
     super.dispose();
   }
 
@@ -468,7 +515,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                     padding: const EdgeInsets.only(left: 2, bottom: 6),
                     child: Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: IosColors.secondaryLabel,
@@ -482,7 +529,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                     maxLines: null,
                     maxLength: maxLength,
                     cursorColor: IosColors.blue,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       height: 1.35,
                       color: IosColors.label,
@@ -950,7 +997,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       height: 28,
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: const Icon(Icons.translate_rounded, size: 17, color: IosColors.blue),
+      icon: Icon(Icons.translate_rounded, size: 17, color: IosColors.blue),
     );
   }
 
@@ -964,7 +1011,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       height: 28,
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: const Icon(Icons.restore_rounded, size: 17, color: IosColors.blue),
+      icon: Icon(Icons.restore_rounded, size: 17, color: IosColors.blue),
     );
   }
 
@@ -974,7 +1021,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       height: 28,
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: const HugeIcon(
+      icon: HugeIcon(
         icon: HugeIcons.strokeRoundedEdit01,
         color: IosColors.blue,
         size: 16,
@@ -1058,7 +1105,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                     width: double.infinity,
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.add_circle_outline_rounded,
                           size: 19,
                           color: IosColors.blue,
@@ -1067,7 +1114,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                         Expanded(
                           child: Text(
                             l10n.detailsAddNote,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14.5,
                               letterSpacing: -0.15,
                               color: IosColors.blue,
@@ -1110,7 +1157,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
 
     return IosGroup(
       title: l10n.modDescription,
-      icon: const HugeIcon(
+      icon: HugeIcon(
         icon: HugeIcons.strokeRoundedBook04,
         color: IosColors.secondaryLabel,
         size: 15,
@@ -1135,7 +1182,17 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
         child: SizedBox(
           width: double.infinity,
           child: BBCodeRenderer(
+            // La descripción puede ser enorme: se va montando por tandas.
+            progressive: true,
             data: hasDescription ? raw : l10n.noDescriptionAvailable,
+            // Match IosGroup's surface; dark palettes preserve source colors.
+            readabilityBackground: IosColors.palette.isDark
+                ? null
+                : (AppMetrics.md
+                    ? IosColors.card
+                    : Color.alphaBlend(
+                        IosColors.overlay(0x14), IosColors.background,
+                      )),
             defaultStyle: TextStyle(
               color: hasDescription
                   ? IosColors.label.withOpacity(0.92)
@@ -1170,8 +1227,8 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                 width: 36,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: const Color(0x4DEBEBF5),
-                  borderRadius: BorderRadius.circular(3),
+                  color: IosColors.tertiaryLabel,
+                  borderRadius: AppMetrics.radius(3),
                 ),
               ),
             ),
@@ -1195,7 +1252,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                             currentModInfo.customName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               letterSpacing: -0.2,
@@ -1213,7 +1270,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                   height: 30,
                   tooltip: l10n.editButtonTooltip,
                   onPressed: _onGeneralEditPressed,
-                  icon: const HugeIcon(
+                  icon: HugeIcon(
                     icon: HugeIcons.strokeRoundedPencilEdit02,
                     size: 18,
                     color: IosColors.icon,
@@ -1233,7 +1290,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
               valueListenable: _scrollOffset,
               builder: (context, offset, _) => Opacity(
                 opacity: _headerProgress(offset),
-                child: Container(height: 0.5, color: const Color(0x24FFFFFF)),
+                child: Container(height: 0.5, color: IosColors.separator),
               ),
             ),
           ),
@@ -1256,8 +1313,8 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.35),
-            borderRadius: BorderRadius.circular(14),
+            color: IosColors.card,
+            borderRadius: AppMetrics.radius(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.35),
@@ -1267,8 +1324,8 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
             ],
           ),
           foregroundDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0x1FFFFFFF), width: 0.5),
+            borderRadius: AppMetrics.radius(14),
+            border: Border.all(color: IosColors.separator, width: 0.5),
           ),
           child: Stack(
             fit: StackFit.expand,
@@ -1287,9 +1344,8 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                           isLocal: !mainImagePath.startsWith('http'),
                           lastModified: currentModInfo.customCoverLastModified,
                           decodeToLayout: true,
-                          placeholder: _coverPlaceholder(),
                         )
-                      : const Center(
+                      : Center(
                           child: HugeIcon(
                             icon: HugeIcons.strokeRoundedPuzzle,
                             size: 64,
@@ -1343,7 +1399,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                   child: IosToolbarButton(
                     width: 32,
                     height: 32,
-                    background: const Color(0x8C000000),
+                    background: const Color(0xFF1C1C1E), // siempre oscuro sobre la portada
                     onPressed: () => widget.onShowImageGallery(currentModInfo),
                     icon: const HugeIcon(
                       icon: HugeIcons.strokeRoundedFullscreen,
@@ -1400,7 +1456,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       children: [
         Text(
           currentModInfo.customName,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.6,
@@ -1414,7 +1470,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
           const SizedBox(height: 4),
           Text(
             l10n.byText(author!),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               letterSpacing: -0.1,
               color: IosColors.secondaryLabel,
@@ -1449,7 +1505,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
               _MetaChip(
                 label: l10n.editionLabelValue(currentModInfo.editionName!),
                 color: IosColors.purple,
-                leading: const Icon(
+                leading: Icon(
                   Icons.layers_rounded,
                   size: 13,
                   color: IosColors.purple,
@@ -1474,10 +1530,10 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
           decoration: BoxDecoration(
-            color: IosColors.yellow.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(12),
+            color: _solid(IosColors.yellow, 0.12),
+            borderRadius: AppMetrics.radius(12),
             border: Border.all(
-              color: IosColors.yellow.withOpacity(0.35),
+              color: _solid(IosColors.yellow, 0.35),
               width: 0.8,
             ),
           ),
@@ -1486,7 +1542,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
               Container(
                 width: 32,
                 height: 32,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: IosColors.yellow,
                   shape: BoxShape.circle,
                 ),
@@ -1505,7 +1561,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                       l10n.updateAvailable(newVersion),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.15,
@@ -1519,7 +1575,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                           '${_prettyVersion(displayVersion)}  →  ${_prettyVersion(newVersion)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: IosColors.secondaryLabel,
                           ),
@@ -1539,7 +1595,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                   ),
                   decoration: BoxDecoration(
                     color: IosColors.yellow,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppMetrics.radius(16),
                   ),
                   child: Text(
                     l10n.detailsUpdateAction,
@@ -1642,7 +1698,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     final (String typeLabel, Color typeColor) = _typeInfo(l10n);
     final String nexusId = currentModInfo.nexusId ?? '';
     final String folderName = p.basename(currentModInfo.directory.path);
-    const Widget copyIcon = Icon(
+    final Widget copyIcon = Icon(
       Icons.copy_rounded,
       size: 15,
       color: IosColors.tertiaryLabel,
@@ -1654,7 +1710,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
           label: l10n.modVersion,
           value: displayVersion,
           onTap: () => _editVersion(displayVersion, l10n),
-          trailing: const Icon(
+          trailing: Icon(
             Icons.chevron_right_rounded,
             size: 18,
             color: IosColors.tertiaryLabel,
@@ -1678,7 +1734,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                 typeLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   letterSpacing: -0.15,
                   color: IosColors.secondaryLabel,
@@ -1716,11 +1772,11 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     for (int i = 0; i < rows.length; i++) {
       if (i > 0) {
         spaced.add(
-          const Divider(
+          Divider(
             height: 0.5,
             thickness: 0.5,
             indent: 14,
-            color: Color(0x1FFFFFFF),
+            color: IosColors.separator,
           ),
         );
       }
@@ -1732,7 +1788,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       icon: _sectionIcon(Icons.info_outline_rounded),
       padding: EdgeInsets.zero,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: AppMetrics.radius(11),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: spaced,
@@ -1769,7 +1825,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
                       other.customName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13.5,
                         letterSpacing: -0.1,
                         color: IosColors.label,
@@ -1792,7 +1848,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
 
     return IosGroup(
       title: l10n.replacesOutfitTitle,
-      icon: const HugeIcon(
+      icon: HugeIcon(
         icon: HugeIcons.strokeRoundedArrowReloadHorizontal,
         color: IosColors.secondaryLabel,
         size: 15,
@@ -1803,12 +1859,12 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
             margin: const EdgeInsets.only(right: 6),
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
             decoration: BoxDecoration(
-              color: IosColors.chip,
-              borderRadius: BorderRadius.circular(10),
+              color: IosColors.elevated,
+              borderRadius: AppMetrics.radius(10),
             ),
             child: IosCountText(
               text: l10n.outfitsCount(outfits.length),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
                 color: IosColors.secondaryLabel,
@@ -1820,7 +1876,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
           height: 28,
           tooltip: l10n.replacesOutfitSelectTooltip,
           onPressed: _openOutfitPicker,
-          icon: const HugeIcon(
+          icon: HugeIcon(
             icon: HugeIcons.strokeRoundedHanger,
             color: IosColors.blue,
             size: 17,
@@ -1853,11 +1909,11 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
             Container(
               width: 48,
               height: 48,
-              decoration: const BoxDecoration(
-                color: IosColors.chip,
+              decoration: BoxDecoration(
+                color: IosColors.elevated,
                 shape: BoxShape.circle,
               ),
-              child: const Center(
+              child: Center(
                 child: HugeIcon(
                   icon: HugeIcons.strokeRoundedHanger,
                   color: IosColors.secondaryLabel,
@@ -1869,7 +1925,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
             Text(
               l10n.replacesOutfitNone,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13.5,
                 height: 1.4,
                 color: IosColors.secondaryLabel,
@@ -1945,10 +2001,7 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     // 1. Prioriza la portada personalizada (incluye '_nexus_cover.jpg' en caché).
     if (currentModInfo.customCoverPath != null &&
         currentModInfo.customCoverPath!.isNotEmpty) {
-      mainImagePath = p.join(
-        currentModInfo.directory.path,
-        currentModInfo.customCoverPath!,
-      );
+      mainImagePath = _coverDisplayPath();
       // 2. Si no hay, usa la imagen de la galería en internet.
     } else if (currentModInfo.gallery != null &&
         currentModInfo.gallery!.isNotEmpty) {
@@ -1972,14 +2025,19 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
     Widget reveal(String id, Widget child) =>
         IosReveal(key: ValueKey<String>(id), index: order++, child: child);
 
-    // Las secciones que se montan al terminar la animación de apertura llevan
-    // su propio contador, para que su cascada empiece enseguida.
-    int lateOrder = 0;
-    Widget lateReveal(String id, Widget child) =>
-        IosReveal(key: ValueKey<String>(id), index: lateOrder++, child: child);
+    // Las secciones pesadas se montan una a una (de arriba abajo) cuando termina
+    // la animación de apertura (ver _revealSections). Cada _StageGate construye
+    // su contenido solo cuando le toca: un rebuild del panel mientras tanto es
+    // barato y lo que ya está en pantalla no se toca al ir apareciendo lo demás.
+    Widget gate(int at, String id, double gap, WidgetBuilder builder) =>
+        _StageGate(
+          key: ValueKey<String>(id),
+          stage: _stage,
+          at: at,
+          gap: gap,
+          builder: builder,
+        );
 
-    // El contenido se construye UNA vez por rebuild del estado (y no en cada
-    // fotograma del arrastre de la hoja): Flutter reutiliza estos widgets.
     final List<Widget> sections = [
       reveal('cover', _buildCover(mainImagePath, l10n)),
       const SizedBox(height: 18),
@@ -1987,13 +2045,12 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       _buildUpdateBanner(l10n, displayVersion),
       const SizedBox(height: 16),
       reveal('actions', _buildQuickActions(l10n, hasLink)),
-      // Resto del contenido: se monta cuando termina la animación de apertura.
-      if (_contentReady) ...[
-      if (showReplacementBlock) ...[
-        const SizedBox(height: 22),
-        lateReveal(
+      if (showReplacementBlock)
+        gate(
+          1,
           'replacement',
-          Column(
+          22,
+          (_) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               IosGroup(
@@ -2029,17 +2086,19 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
             ],
           ),
         ),
-      ],
-      const SizedBox(height: 22),
-      lateReveal('info', _buildInformationGroup(l10n, author, displayVersion)),
-      if (widget.otherEditions.isNotEmpty) ...[
-        const SizedBox(height: 18),
-        lateReveal('editions', _buildOtherEditions(l10n)),
-      ],
-      const SizedBox(height: 22),
-      lateReveal(
+      gate(
+        2,
+        'info',
+        22,
+        (_) => _buildInformationGroup(l10n, author, displayVersion),
+      ),
+      if (widget.otherEditions.isNotEmpty)
+        gate(3, 'editions', 18, (_) => _buildOtherEditions(l10n)),
+      gate(
+        4,
         'summary',
-        _buildInfoSection(
+        22,
+        (_) => _buildInfoSection(
           l10n: l10n,
           title: l10n.modSummary,
           icon: _sectionIcon(Icons.description_outlined),
@@ -2053,11 +2112,8 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
           onEdit: () => _editSummary(l10n),
         ),
       ),
-      const SizedBox(height: 18),
-      lateReveal('notes', _buildNotesSection(l10n)),
-      const SizedBox(height: 18),
-      lateReveal('description', _buildDescriptionSection(l10n)),
-      ],
+      gate(5, 'notes', 18, (_) => _buildNotesSection(l10n)),
+      gate(6, 'description', 18, (_) => _buildDescriptionSection(l10n)),
     ];
 
     return DraggableScrollableSheet(
@@ -2068,36 +2124,13 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
       maxChildSize: 0.9,
       expand: false,
       builder: (_, scrollController) {
-        // Mientras el visor de imágenes está abierto este panel queda tapado
-        // por su fondo oscuro: se pausa el desenfoque (repetirlo en cada
-        // fotograma estorbaba a la animación y al zoom). Al cerrar el visor
-        // vuelve solo. El contenido (`child`) no se reconstruye.
-        return AnimatedBuilder(
-          animation: Listenable.merge([imageViewerActive, _glassSettled]),
-          builder: (context, child) {
-            final bool settled = _glassSettled.value;
-            // Fondo de cristal: desenfoque de 40 px y color translúcido (86 %).
-            // Mientras la hoja se abre va casi opaco (95 %) y sin desenfoque;
-            // al asentarse el color se aclara con un fundido y entra el blur.
-            return TweenAnimationBuilder<Color?>(
-              tween: ColorTween(
-                end: settled
-                    ? const Color(0xDB1C1C1E)
-                    : const Color(0xF21C1C1E),
-              ),
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOut,
-              child: child,
-              builder: (context, color, inner) => IosGlass(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                blur: 40,
-                blurEnabled: settled && !imageViewerActive.value,
-                color: color ?? const Color(0xDB1C1C1E),
-                child: inner!,
-              ),
-            );
-          },
+        // Fondo sólido: sin desenfoque ni transparencia.
+        return Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: IosColors.background,
+            borderRadius: AppMetrics.sheetRadius(16),
+          ),
           child: Material(
             type: MaterialType.transparency,
             child: Column(
@@ -2147,6 +2180,74 @@ class ModDetailsPanelState extends State<ModDetailsPanel> {
 }
 
 // ============================================================================
+//  APARICIÓN POR ETAPAS
+// ============================================================================
+
+/// Construye su contenido solo cuando el contador [stage] llega a [at], y lo
+/// hace aparecer con el fundido de [IosReveal]. Mientras no le toca ocupa
+/// 0 px y no construye nada.
+///
+/// Escucha el contador por su cuenta (con su propio setState), así que al
+/// avanzar de etapa solo se reconstruye la sección que entra, no el panel.
+class _StageGate extends StatefulWidget {
+  const _StageGate({
+    super.key,
+    required this.stage,
+    required this.at,
+    required this.builder,
+    this.gap = 0,
+  });
+
+  final ValueListenable<int> stage;
+  final int at;
+  final WidgetBuilder builder;
+
+  /// Espacio sobre la sección; entra junto con ella (no queda un hueco vacío
+  /// mientras la sección todavía no está).
+  final double gap;
+
+  @override
+  State<_StageGate> createState() => _StageGateState();
+}
+
+class _StageGateState extends State<_StageGate> {
+  late bool _open = widget.stage.value >= widget.at;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_open) widget.stage.addListener(_check);
+  }
+
+  void _check() {
+    if (_open || !mounted) return;
+    if (widget.stage.value >= widget.at) {
+      widget.stage.removeListener(_check);
+      setState(() => _open = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.stage.removeListener(_check);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_open) return const SizedBox.shrink();
+    return IosReveal(
+      offset: 10,
+      duration: const Duration(milliseconds: 420),
+      child: Padding(
+        padding: EdgeInsets.only(top: widget.gap),
+        child: Builder(builder: widget.builder),
+      ),
+    );
+  }
+}
+
+// ============================================================================
 //  WIDGETS INTERNOS DEL PANEL
 // ============================================================================
 
@@ -2160,12 +2261,18 @@ class _GlassPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0x8C000000),
-        borderRadius: BorderRadius.circular(20),
+      constraints: mdChipConstraints,
+      padding: EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: AppMetrics.u ? 0 : 5,
       ),
-      child: child,
+      decoration: BoxDecoration(
+        // Siempre oscuro (en cualquier tema): va sobre la portada y su
+        // contenido es blanco.
+        color: const Color(0xFF1C1C1E),
+        borderRadius: AppMetrics.radius(20),
+      ),
+      child: mdChipChild(child),
     );
   }
 }
@@ -2189,29 +2296,35 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget chip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(20),
+      constraints: mdChipConstraints,
+      padding: EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: AppMetrics.u ? 0 : 5,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 6)],
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.1,
-                color: color,
+      decoration: BoxDecoration(
+        color: _solid(color, 0.16),
+        borderRadius: AppMetrics.radius(20),
+      ),
+      child: mdChipChild(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (leading != null) ...[leading!, const SizedBox(width: 6)],
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppMetrics.u ? 13 : 12.5,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: AppMetrics.u ? 0 : -0.1,
+                  color: color,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
@@ -2259,8 +2372,8 @@ class _ActionTileState extends State<_ActionTile> {
     final Color? tint = widget.tint;
     final Color fg = tint ?? IosColors.icon;
     final Color bg = tint != null
-        ? tint.withOpacity(_hover ? 0.24 : 0.16)
-        : (_hover ? IosColors.chipHover : IosColors.chip);
+        ? _solid(tint, _hover ? 0.24 : 0.16)
+        : (_hover ? IosColors.elevatedHover : IosColors.elevated);
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 160),
@@ -2274,7 +2387,7 @@ class _ActionTileState extends State<_ActionTile> {
           height: 68,
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppMetrics.radius(12),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -2339,12 +2452,13 @@ class _InfoRowState extends State<_InfoRow> {
   Widget build(BuildContext context) {
     final bool tappable = widget.onTap != null;
 
-    Color bg = Colors.transparent;
+    // Transparente del MISMO color de destino (evita el parpadeo oscuro).
+    Color bg = IosColors.controlHover.withAlpha(0);
     if (tappable) {
       if (_pressed) {
-        bg = const Color(0x24FFFFFF);
+        bg = IosColors.controlPressed;
       } else if (_hover) {
-        bg = const Color(0x0FFFFFFF);
+        bg = IosColors.controlHover;
       }
     }
 
@@ -2369,7 +2483,7 @@ class _InfoRowState extends State<_InfoRow> {
             children: [
               Text(
                 widget.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   letterSpacing: -0.15,
                   color: IosColors.label,
@@ -2386,7 +2500,7 @@ class _InfoRowState extends State<_InfoRow> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           letterSpacing: -0.15,
                           color: IosColors.secondaryLabel,
@@ -2468,12 +2582,12 @@ class _OutfitCardState extends State<_OutfitCard> {
                       clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
                         color: IosColors.card,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppMetrics.radius(12),
                       ),
                       foregroundDecoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppMetrics.radius(12),
                         border: Border.all(
-                          color: const Color(0x1FFFFFFF),
+                          color: IosColors.separator,
                           width: 0.5,
                         ),
                       ),
@@ -2494,12 +2608,12 @@ class _OutfitCardState extends State<_OutfitCard> {
                                   horizontal: 8,
                                   vertical: 7,
                                 ),
-                                color: const Color(0x33000000),
+                                color: IosColors.sunken,
                                 child: Tooltip(
                                   message: widget.outfit,
                                   child: Text(
                                     widget.outfit,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: IosColors.secondaryLabel,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w500,
@@ -2529,8 +2643,8 @@ class _OutfitCardState extends State<_OutfitCard> {
                                     child: Container(
                                       width: 24,
                                       height: 24,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0x99000000),
+                                      decoration: BoxDecoration(
+                                        color: IosColors.background,
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(
@@ -2575,19 +2689,19 @@ class _AddOutfitTile extends StatelessWidget {
         child: Container(
           width: 84,
           decoration: BoxDecoration(
-            color: IosColors.chip,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0x1FFFFFFF), width: 0.5),
+            color: IosColors.elevated,
+            borderRadius: AppMetrics.radius(12),
+            border: Border.all(color: IosColors.separator, width: 0.5),
           ),
           child: Center(
             child: Container(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: IosColors.blue.withOpacity(0.16),
+                color: _solid(IosColors.blue, 0.16),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.add_rounded,
                 size: 21,
                 color: IosColors.blue,
@@ -2599,3 +2713,8 @@ class _AddOutfitTile extends StatelessWidget {
     );
   }
 }
+
+/// Color OPACO equivalente a [tint] con opacidad [a] sobre el fondo del panel
+/// (para tintes que antes eran translúcidos).
+Color _solid(Color tint, double a) =>
+    Color.alphaBlend(tint.withOpacity(a), IosColors.background);

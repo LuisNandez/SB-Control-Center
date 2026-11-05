@@ -1,14 +1,22 @@
 // Es puramente UI. Es la pantalla de ajustes donde el usuario configura las rutas del juego, 7-Zip, su API Key de Nexus,
-// el idioma y desinstala componentes core (UE4SS/CNS). Diseño de escritorio al estilo Ajustes del Sistema de macOS:
+// el idioma, la apariencia (tema y diseño) y desinstala componentes core (UE4SS/CNS). Diseño de escritorio al estilo Ajustes del Sistema de macOS:
 // barra lateral con categorías a la izquierda y panel de contenido a la derecha que ocupa todo el espacio.
 import 'package:flutter/material.dart';
 import 'l10n/app_localizations.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'ui/theme/ios_theme.dart';
+import 'ui/theme/app_themes.dart';
+import 'ui/theme/app_layout.dart';
+import 'ui/widgets/layout_picker.dart';
+import 'ui/widgets/theme_picker.dart';
 import 'ui/widgets/ios_widgets.dart';
 import 'ui/widgets/ios_settings_widgets.dart';
+import 'ui/widgets/gpu_acceleration_settings.dart';
 import 'ui/dialogs/settings_dialogs.dart';
 import 'ui/widgets/self_endorse_section.dart';
+import 'ui/theme/app_metrics.dart';
+import 'ui/widgets/app_title_bar.dart';
+import 'ui/widgets/window_chrome_settings.dart';
 
 class SettingsPage extends StatefulWidget {
   final String? initialGameRootPath;
@@ -27,6 +35,9 @@ class SettingsPage extends StatefulWidget {
   final Future<void> Function() onCheckAppUpdate;
   /// Abre el historial de versiones (changelog).
   final Future<void> Function() onShowChangelog;
+  /// Versión de la app que se eligió omitir (null si no hay) y cómo deshacerlo.
+  final Future<String?> Function() onGetSkippedAppVersion;
+  final Future<void> Function() onClearSkippedAppVersion;
   final bool isDeveloperModeEnabled;
 
   final Future<String?> Function() onSelectGamePath;
@@ -41,6 +52,12 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onShowModTypeTagsChanged;
   final bool initialAutoAssignOutfits;
   final ValueChanged<bool> onAutoAssignOutfitsChanged;
+  /// Tema de colores actual y callback para cambiarlo (se aplica al instante).
+  final AppThemeId initialThemeId;
+  final ValueChanged<AppThemeId> onThemeChanged;
+  /// Diseño actual (Cristal / Material / Plano) y callback para cambiarlo (al instante).
+  final AppLayoutId initialLayoutId;
+  final ValueChanged<AppLayoutId> onLayoutChanged;
   final VoidCallback onRunConflictPatcher;
   final VoidCallback onRevertConflictPatches;
 
@@ -62,6 +79,8 @@ class SettingsPage extends StatefulWidget {
     required this.onTestSelfUpdate,
     required this.onCheckAppUpdate,
     required this.onShowChangelog,
+    required this.onGetSkippedAppVersion,
+    required this.onClearSkippedAppVersion,
     required this.isDeveloperModeEnabled,
     required this.onSelectGamePath,
     required this.onShowApiKeyDialog,
@@ -75,6 +94,10 @@ class SettingsPage extends StatefulWidget {
     required this.onShowModTypeTagsChanged,
     required this.initialAutoAssignOutfits,
     required this.onAutoAssignOutfitsChanged,
+    required this.initialThemeId,
+    required this.onThemeChanged,
+    required this.initialLayoutId,
+    required this.onLayoutChanged,
     required this.onRunConflictPatcher,
     required this.onRevertConflictPatches,
     this.startOnApiKey = false,
@@ -84,7 +107,7 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-enum _Pane { general, paths, core, connectivity, developer }
+enum _Pane { general, appearance, paths, core, connectivity, developer }
 
 class _SettingsPageState extends State<SettingsPage> {
   late String? gameRootPath;
@@ -94,10 +117,13 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool isCnsCoreInstalled;
   late bool _showModTypeTags;
   late bool _autoAssignOutfits;
+  late AppThemeId _themeId;
+  late AppLayoutId _layoutId;
 
   _Pane _selected = _Pane.general;
   bool _refreshingMetadata = false;
   bool _checkingAppUpdate = false;
+  String? _skippedAppVersion;
 
   @override
   void initState() {
@@ -108,6 +134,9 @@ class _SettingsPageState extends State<SettingsPage> {
     isCnsCoreInstalled = widget.isCnsCoreInstalled;
     _showModTypeTags = widget.initialShowModTypeTags;
     _autoAssignOutfits = widget.initialAutoAssignOutfits;
+    _themeId = widget.initialThemeId;
+    _layoutId = widget.initialLayoutId;
+    _loadSkippedAppVersion();
     if (widget.startOnApiKey) {
       _selected = _Pane.connectivity;
       // Tras el primer frame (con la página ya construida) se abre el diálogo.
@@ -115,6 +144,12 @@ class _SettingsPageState extends State<SettingsPage> {
         if (mounted) _editApiKey();
       });
     }
+  }
+
+  /// Lee la versión de la app omitida (para mostrar la opción de deshacerlo).
+  Future<void> _loadSkippedAppVersion() async {
+    final v = await widget.onGetSkippedAppVersion();
+    if (mounted) setState(() => _skippedAppVersion = v);
   }
 
   /// Abre el diálogo de la API key y refleja el resultado en la página.
@@ -145,6 +180,12 @@ class _SettingsPageState extends State<SettingsPage> {
           color: Colors.white,
           size: s,
         ),
+      ),
+      _PaneInfo(
+        pane: _Pane.appearance,
+        label: l10n.settingsAppearance,
+        color: IosColors.teal,
+        icon: (s) => Icon(Icons.palette_rounded, color: Colors.white, size: s),
       ),
       _PaneInfo(
         pane: _Pane.paths,
@@ -216,16 +257,22 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Volver a la ventana principal
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          // Volver a la ventana principal. Con la barra fusionada es también
+          // la zona de arrastre y deja sitio al semáforo (si va a la izquierda).
+          WindowChrome.dragArea(Padding(
+            padding: EdgeInsets.fromLTRB(
+              12 + WindowChrome.leftInset,
+              WindowChrome.merged.value ? (WindowChrome.barHeight - 34) / 2 : 12,
+              12,
+              WindowChrome.merged.value ? (WindowChrome.barHeight - 34) / 2 : 0,
+            ),
             child: Align(
               alignment: Alignment.centerLeft,
               child: IosToolbarButton(
                 width: 34,
                 height: 34,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                icon: const Icon(
+                icon: Icon(
                   Icons.arrow_back_ios_new_rounded,
                   size: 16,
                   color: IosColors.blue,
@@ -233,12 +280,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
             ),
-          ),
+          )),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 16, 14),
             child: Text(
               l10n.settings,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.4,
@@ -273,11 +320,12 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Barra de título del panel (como la de Ajustes del Sistema)
-        Container(
-          height: 56,
+        WindowChrome.dragArea(Container(
+          // Fusionada: misma altura que la barra de herramientas principal.
+          height: WindowChrome.merged.value ? WindowChrome.barHeight : 56,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 28),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: IosColors.background,
             border: Border(
               bottom: BorderSide(color: IosColors.separator, width: 0.5),
@@ -287,14 +335,14 @@ class _SettingsPageState extends State<SettingsPage> {
             current.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               letterSpacing: -0.2,
               color: IosColors.label,
             ),
           ),
-        ),
+        )),
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 140),
@@ -317,6 +365,8 @@ class _SettingsPageState extends State<SettingsPage> {
     switch (pane) {
       case _Pane.general:
         return _generalSections(l10n);
+      case _Pane.appearance:
+        return _appearanceSections(l10n);
       case _Pane.paths:
         return _pathsSections(l10n);
       case _Pane.core:
@@ -374,7 +424,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
-      // Acerca de (en macOS vive dentro de General)
+      // Rendimiento: usar la gráfica de alto rendimiento de Windows (opt-in).
+      const GpuAccelerationSection(),
+      // Acerca de (vive dentro de General)
       IosSettingsSection(
         children: [
           IosSettingsTile(
@@ -394,6 +446,46 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: EdgeInsets.only(top: 4),
         child: SelfEndorseSection(),
       ),
+    ];
+  }
+
+  // -------------------------------------------------------------- Apariencia
+
+  /// Tema de colores + diseño de la interfaz. Ambos se aplican al instante en
+  /// toda la app y son independientes: cualquier tema funciona con cualquier
+  /// diseño.
+  List<Widget> _appearanceSections(AppLocalizations l10n) {
+    return [
+      IosSettingsSection(
+        title: l10n.settingsTheme,
+        footer: l10n.settingsThemeDesc,
+        children: [
+          IosThemePicker(
+            selected: _themeId,
+            onChanged: (AppThemeId id) {
+              if (id == _themeId) return;
+              setState(() => _themeId = id);
+              widget.onThemeChanged(id);
+            },
+          ),
+        ],
+      ),
+      IosSettingsSection(
+        title: l10n.settingsLayout,
+        footer: l10n.settingsLayoutDesc,
+        children: [
+          IosLayoutPicker(
+            selected: _layoutId,
+            onChanged: (AppLayoutId id) {
+              if (id == _layoutId) return;
+              setState(() => _layoutId = id);
+              widget.onLayoutChanged(id);
+            },
+          ),
+        ],
+      ),
+      // Botones de la ventana y barra fusionada.
+      ...windowChromeSections(context),
     ];
   }
 
@@ -446,7 +538,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: widget.onRunConflictPatcher,
           ),
           IosSettingsTile(
-            leading: const IosIconBadge(
+            leading: IosIconBadge(
               color: IosColors.gray,
               child: Icon(
                 Icons.settings_backup_restore_rounded,
@@ -460,7 +552,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: widget.onRevertConflictPatches,
           ),
           IosSettingsTile(
-            leading: const IosIconBadge(
+            leading: IosIconBadge(
               color: IosColors.red,
               child: Icon(
                 Icons.videogame_asset_off_outlined,
@@ -485,7 +577,7 @@ class _SettingsPageState extends State<SettingsPage> {
       IosSettingsSection(
         children: [
           IosSettingsTile(
-            leading: const IosIconBadge(
+            leading: IosIconBadge(
               color: IosColors.purple,
               child: Icon(
                 Icons.shape_line_outlined,
@@ -580,11 +672,26 @@ class _SettingsPageState extends State<SettingsPage> {
                     setState(() => _checkingAppUpdate = true);
                     try {
                       await widget.onCheckAppUpdate();
+                      await _loadSkippedAppVersion();
                     } finally {
                       if (mounted) setState(() => _checkingAppUpdate = false);
                     }
                   },
           ),
+          if (_skippedAppVersion != null)
+            IosSettingsTile(
+              leading: IosIconBadge(
+                color: IosColors.orange,
+                child: _badgeIcon(HugeIcons.strokeRoundedRefresh01),
+              ),
+              title: l10n.settingsSkippedAppVersion,
+              subtitle: l10n.settingsSkippedAppVersionDesc(_skippedAppVersion!),
+              showChevron: true,
+              onTap: () async {
+                await widget.onClearSkippedAppVersion();
+                await _loadSkippedAppVersion();
+              },
+            ),
           IosSettingsTile(
             leading: IosIconBadge(
               color: IosColors.purple,
@@ -648,7 +755,7 @@ class _SettingsPageState extends State<SettingsPage> {
       IosSettingsSection(
         children: [
           IosSettingsTile(
-            leading: const IosIconBadge(
+            leading: IosIconBadge(
               color: IosColors.orange,
               child: Icon(
                 Icons.delete_sweep_outlined,
@@ -662,7 +769,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: widget.onDeleteAllNexusInfo,
           ),
           IosSettingsTile(
-            leading: const IosIconBadge(
+            leading: IosIconBadge(
               color: IosColors.blue,
               child: Icon(
                 Icons.upload_file_outlined,
@@ -676,7 +783,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: widget.onExtractModIds,
           ),
           IosSettingsTile(
-            leading: const IosIconBadge(
+            leading: IosIconBadge(
               color: IosColors.green,
               child: Icon(
                 Icons.system_update_alt_rounded,
@@ -738,7 +845,7 @@ class _SidebarItemState extends State<_SidebarItem> {
   Widget build(BuildContext context) {
     final Color bg = widget.selected
         ? IosColors.blue
-        : (_hover ? const Color(0x14FFFFFF) : Colors.transparent);
+        : (_hover ? IosColors.overlay(0x14) : Colors.transparent);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -754,7 +861,7 @@ class _SidebarItemState extends State<_SidebarItem> {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppMetrics.radius(8),
           ),
           child: Row(
             children: [

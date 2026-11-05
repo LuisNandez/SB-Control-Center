@@ -6,6 +6,36 @@
     "settingsGeneral": "通用",
     "settingsLanguage": "语言",
     "settingsLanguageDesc": "选择应用程序语言",
+    "settingsTheme": "主题",
+    "settingsThemeDesc": "选择应用的外观。“自动”将跟随系统的浅色或深色模式。",
+    "themeSystem": "自动",
+    "themeDark": "深色",
+    "themeMidnight": "午夜",
+    "themeLight": "浅色",
+    "themeOcean": "海洋",
+    "themeForest": "森林",
+    "themeViolet": "紫罗兰",
+    "themeSand": "沙色",
+    "themeCocoa": "可可",
+    "settingsAppearance": "外观",
+    "settingsLayout": "布局",
+    "settingsLayoutDesc": "选择主窗口的布局：macOS 风格（半透明、圆角）、卡片更大的 Material，或扁平（简洁、细线条）。立即生效。",
+    "layoutMacos": "macOS 风格",
+    "layoutMaterial": "Material",
+    "layoutFlat": "扁平",
+    "settingsGpuAccel": "使用显卡",
+    "settingsGpuAccelDesc": "如果电脑有独立显卡，则优先使用",
+    "settingsGpuAccelFooter": "请求 Windows 使用高性能显卡运行本应用，适用于同时配备集成显卡和独立显卡的笔记本电脑。如果电脑只有一块显卡，则不会有任何变化。重启应用后生效。",
+    "settingsGpuAccelRestart": "重启应用以应用更改",
+    "settingsGpuAccelFailed": "无法更改 Windows 的显卡偏好设置",
+    "settingsGpuAccelSingle": "此电脑只有一块显卡",
+    "settingsGpuRestartTitle": "立即重启？",
+    "settingsGpuRestartMsg": "为应用显卡更改，应用将关闭并自动重新打开。",
+    "settingsGpuRestartNow": "立即重启",
+    "settingsGpuRestartLater": "稍后",
+    "ecoModeTitle": "节能模式",
+    "ecoModeMessage": "Stellar Blade 正在运行。应用将尽量减少资源占用，关闭游戏后会自动恢复正常。",
+    "ecoModeShowApp": "仍然显示应用",
     "settingsAbout": "关于",
     "settingsAboutDesc": "有关应用程序的信息",
     "settingsRefreshMetadata": "更新元数据",
@@ -645,5 +675,50 @@
   "errorAdjustingCoverText": "调整封面时出错：{error}",
   "@errorAdjustingCoverText": {
     "placeholders": { "error": {} }
-  }
+  },
+  "appUpdateAvailableTitle": "有可用更新",
+  "appUpdateAvailableMsg": "应用将下载并安装更新，然后自动重启。",
+  "appUpdateInstalledLabel": "已安装",
+  "appUpdateAvailableLabel": "可用",
+  "appUpdateDownloadSize": "下载大小：{size}",
+  "@appUpdateDownloadSize": {
+    "placeholders": { "size": { "type": "String" } }
+  },
+  "appUpdateNow": "立即更新",
+  "appUpdateLater": "稍后",
+  "appUpdateSkip": "跳过此版本",
+  "appUpdateDownloading": "正在下载更新…",
+  "appUpdateUpToDate": "你已是最新版本",
+  "appUpdateCheckFailed": "无法检查更新",
+  "settingsCheckAppUpdate": "检查应用更新",
+  "settingsCheckAppUpdateDesc": "在 GitHub 上查找 SB Control Center 的新版本",
+  "settingsChangelog": "更新日志",
+  "settingsChangelogDesc": "查看每个版本的新内容",
+  "changelogWhatsNewTitle": "{version} 的新内容",
+  "@changelogWhatsNewTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogUpdatedSubtitle": "SB Control Center 已成功更新",
+  "changelogHistoryTitle": "更新日志",
+  "changelogInstalledVersion": "已安装版本：{version}",
+  "@changelogInstalledVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "changelogInstalledBadge": "已安装",
+  "changelogPrereleaseBadge": "预发布",
+  "changelogEmpty": "此版本没有说明。",
+  "changelogViewOnGithub": "在 GitHub 上查看",
+  "changelogLoadFailed": "无法加载更新日志。请检查你的网络连接。",
+  "changelogRetry": "重试",
+  "settingsSkippedAppVersion": "已跳过的应用更新",
+  "settingsSkippedAppVersionDesc": "版本 {version} 已隐藏。点按即可重新接收该版本的通知。",
+  "@settingsSkippedAppVersionDesc": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedTitle": "已跳过版本 {version}",
+  "@appUpdateSkippedTitle": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "appUpdateSkippedDesc": "你可以在 设置 › 连接与更新 中撤销。",
+  "appUpdateUnskippedTitle": "你将再次收到应用更新通知"
 }

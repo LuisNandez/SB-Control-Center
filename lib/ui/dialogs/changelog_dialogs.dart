@@ -13,6 +13,7 @@ import '../../services/github_update_service.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/changelog_view.dart';
 import '../widgets/ios_widgets.dart';
+import '../theme/app_metrics.dart';
 
 Future<void> _openUrl(String url) async {
   final uri = Uri.tryParse(url);
@@ -48,7 +49,7 @@ class UpdateVersionCard extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             letterSpacing: 0.3,
             color: IosColors.secondaryLabel,
@@ -70,9 +71,9 @@ class UpdateVersionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0x14FFFFFF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0x1FFFFFFF), width: 0.8),
+        color: IosColors.overlay(0x14),
+        borderRadius: AppMetrics.radius(10),
+        border: Border.all(color: IosColors.overlay(0x1F), width: 0.8),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -87,7 +88,7 @@ class UpdateVersionCard extends StatelessWidget {
                   FontWeight.w500,
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.arrow_forward_rounded,
                 size: 18,
                 color: IosColors.tertiaryLabel,
@@ -106,7 +107,7 @@ class UpdateVersionCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               footer!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 color: IosColors.secondaryLabel,
               ),
@@ -139,12 +140,69 @@ class _ChangelogShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final double maxHeight =
         math.max(260.0, MediaQuery.of(context).size.height - 96);
-    const Color line = Color(0x38FFFFFF);
+    final Color line = IosColors.overlay(0x38);
+    // Material: misma ventana que el resto (esquinas de 28, título a la
+    // izquierda y botones a la derecha); conserva su ancho porque muestra texto largo.
+    if (AppMetrics.md) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 600, maxHeight: maxHeight),
+        child: IosGlass(
+          shadow: true,
+          borderRadius: BorderRadius.circular(AppMetrics.dialogRadius),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                        color: IosColors.label,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: IosColors.secondaryLabel,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(height: 1, color: line),
+              Flexible(child: body),
+              Container(height: 1, color: line),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: actions,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: 600, maxHeight: maxHeight),
       child: IosGlass(
         shadow: true,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppMetrics.radius(14),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -157,7 +215,7 @@ class _ChangelogShell extends StatelessWidget {
                   Text(
                     title,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.3,
@@ -169,7 +227,7 @@ class _ChangelogShell extends StatelessWidget {
                     Text(
                       subtitle!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         color: IosColors.secondaryLabel,
                       ),
@@ -339,7 +397,7 @@ class _HistoryBodyState extends State<_HistoryBody> {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: color.withAlpha(46),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppMetrics.radius(8),
       ),
       child: Text(
         text,
@@ -382,7 +440,7 @@ class _HistoryBodyState extends State<_HistoryBody> {
                   AnimatedRotation(
                     turns: open ? 0.25 : 0,
                     duration: const Duration(milliseconds: 150),
-                    child: const Icon(
+                    child: Icon(
                       Icons.chevron_right_rounded,
                       size: 20,
                       color: IosColors.secondaryLabel,
@@ -394,7 +452,7 @@ class _HistoryBodyState extends State<_HistoryBody> {
                       'v${r.version}${showName ? '  ·  ${r.name}' : ''}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w600,
                         color: IosColors.label,
@@ -408,7 +466,7 @@ class _HistoryBodyState extends State<_HistoryBody> {
                   if (date.isNotEmpty)
                     Text(
                       date,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: IosColors.secondaryLabel,
                       ),
@@ -426,7 +484,7 @@ class _HistoryBodyState extends State<_HistoryBody> {
               emptyText: l10n.changelogEmpty,
             ),
           ),
-        Container(height: 0.5, color: const Color(0x24FFFFFF)),
+        Container(height: 0.5, color: IosColors.overlay(0x24)),
       ],
     );
   }
@@ -451,7 +509,7 @@ class _HistoryBodyState extends State<_HistoryBody> {
             Text(
               l10n.changelogLoadFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 color: IosColors.secondaryLabel,
               ),
@@ -472,7 +530,7 @@ class _HistoryBodyState extends State<_HistoryBody> {
         child: Text(
           l10n.changelogEmpty,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 13, color: IosColors.secondaryLabel),
+          style: TextStyle(fontSize: 13, color: IosColors.secondaryLabel),
         ),
       );
     }

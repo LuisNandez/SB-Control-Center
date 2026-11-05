@@ -150,6 +150,186 @@ abstract class AppLocalizations {
   /// **'Choose the application language'**
   String get settingsLanguageDesc;
 
+  /// No description provided for @settingsTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get settingsTheme;
+
+  /// No description provided for @settingsThemeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the app\'s look. “Automatic” follows your system\'s light or dark mode.'**
+  String get settingsThemeDesc;
+
+  /// No description provided for @themeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get themeSystem;
+
+  /// No description provided for @themeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeDark;
+
+  /// No description provided for @themeMidnight.
+  ///
+  /// In en, this message translates to:
+  /// **'Midnight'**
+  String get themeMidnight;
+
+  /// No description provided for @themeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeLight;
+
+  /// No description provided for @themeOcean.
+  ///
+  /// In en, this message translates to:
+  /// **'Ocean'**
+  String get themeOcean;
+
+  /// No description provided for @themeForest.
+  ///
+  /// In en, this message translates to:
+  /// **'Forest'**
+  String get themeForest;
+
+  /// No description provided for @themeViolet.
+  ///
+  /// In en, this message translates to:
+  /// **'Violet'**
+  String get themeViolet;
+
+  /// No description provided for @themeSand.
+  ///
+  /// In en, this message translates to:
+  /// **'Sand'**
+  String get themeSand;
+
+  /// No description provided for @themeCocoa.
+  ///
+  /// In en, this message translates to:
+  /// **'Cocoa'**
+  String get themeCocoa;
+
+  /// No description provided for @settingsAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
+  /// No description provided for @settingsLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout'**
+  String get settingsLayout;
+
+  /// No description provided for @settingsLayoutDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how the main window looks: macOS style (translucent and rounded), Material with larger cards, or Flat (clean, thin outlines). It applies instantly.'**
+  String get settingsLayoutDesc;
+
+  /// No description provided for @layoutMacos.
+  ///
+  /// In en, this message translates to:
+  /// **'macOS style'**
+  String get layoutMacos;
+
+  /// No description provided for @layoutMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Material'**
+  String get layoutMaterial;
+
+  /// No description provided for @layoutFlat.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat'**
+  String get layoutFlat;
+
+  /// No description provided for @settingsGpuAccel.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the graphics card'**
+  String get settingsGpuAccel;
+
+  /// No description provided for @settingsGpuAccelDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Prefers the dedicated GPU if your PC has one'**
+  String get settingsGpuAccelDesc;
+
+  /// No description provided for @settingsGpuAccelFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Asks Windows to run the app on the high-performance graphics card, useful on laptops with both integrated and dedicated graphics. If your PC has a single graphics card, nothing changes. Applies after restarting the app.'**
+  String get settingsGpuAccelFooter;
+
+  /// No description provided for @settingsGpuAccelRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart the app to apply the change'**
+  String get settingsGpuAccelRestart;
+
+  /// No description provided for @settingsGpuAccelFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The Windows graphics preference could not be changed'**
+  String get settingsGpuAccelFailed;
+
+  /// No description provided for @settingsGpuAccelSingle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your PC has only one graphics card'**
+  String get settingsGpuAccelSingle;
+
+  /// No description provided for @settingsGpuRestartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart now?'**
+  String get settingsGpuRestartTitle;
+
+  /// No description provided for @settingsGpuRestartMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'To apply the graphics change, the app will close and reopen automatically.'**
+  String get settingsGpuRestartMsg;
+
+  /// No description provided for @settingsGpuRestartNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart now'**
+  String get settingsGpuRestartNow;
+
+  /// No description provided for @settingsGpuRestartLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get settingsGpuRestartLater;
+
+  /// No description provided for @ecoModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Power saving mode'**
+  String get ecoModeTitle;
+
+  /// No description provided for @ecoModeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Stellar Blade is running. The app is using as few resources as possible and will return to normal when you close the game.'**
+  String get ecoModeMessage;
+
+  /// No description provided for @ecoModeShowApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the app anyway'**
+  String get ecoModeShowApp;
+
   /// No description provided for @settingsAbout.
   ///
   /// In en, this message translates to:
@@ -2211,6 +2391,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get changelogRetry;
+
+  /// No description provided for @settingsSkippedAppVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped app update'**
+  String get settingsSkippedAppVersion;
+
+  /// No description provided for @settingsSkippedAppVersionDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is hidden. Tap to get notified about it again.'**
+  String settingsSkippedAppVersionDesc(String version);
+
+  /// No description provided for @appUpdateSkippedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} skipped'**
+  String appUpdateSkippedTitle(String version);
+
+  /// No description provided for @appUpdateSkippedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'You can undo this in Settings → Connectivity & Updates.'**
+  String get appUpdateSkippedDesc;
+
+  /// No description provided for @appUpdateUnskippedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll be notified about app updates again'**
+  String get appUpdateUnskippedTitle;
 
   /// No description provided for @devExtractNoData.
   ///

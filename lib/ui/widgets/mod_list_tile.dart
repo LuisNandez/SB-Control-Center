@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../theme/minimal_style.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../../models/mod_info.dart';
 import '../../l10n/app_localizations.dart';
+import '../theme/app_layout.dart';
+import '../theme/app_metrics.dart';
 import '../theme/ios_theme.dart';
 import 'animated_mod_switch.dart';
 import 'ios_widgets.dart';
@@ -53,19 +56,21 @@ class ModListTile extends StatelessWidget {
     required dynamic icon,
     required String tooltip,
     required VoidCallback? onPressed,
-    Color color = IosColors.icon,
+    Color? color,
   }) {
     return IosToolbarButton(
       width: 30,
       height: 30,
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: HugeIcon(icon: icon, size: 17, color: color),
+      icon: HugeIcon(icon: icon, size: 17, color: color ?? IosColors.icon),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool md = AppLayouts.isMaterial;
+    final bool u = AppMetrics.u;
     final bool showUpdate = updateInfo != null && !isIgnored;
     final bool enabled = modInfo.isEnabled;
     final bool hasVersion =
@@ -73,7 +78,9 @@ class ModListTile extends StatelessWidget {
 
     final Color ringColor = showUpdate
         ? IosColors.yellow
-        : (isHighlighted ? IosColors.blue : const Color(0x14FFFFFF));
+        : (isHighlighted
+            ? IosColors.blue
+            : (md ? Colors.transparent : IosColors.overlay(0x14)));
     final bool hasRing = showUpdate || isHighlighted;
 
     String? updateVersionText;
@@ -83,29 +90,39 @@ class ModListTile extends StatelessWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: isHighlighted
-            ? Color.alphaBlend(IosColors.blue.withOpacity(0.16), IosColors.card)
-            : IosColors.card,
-        borderRadius: BorderRadius.circular(12),
+      margin: EdgeInsets.symmetric(vertical: u ? 6 : 3),
+      padding: EdgeInsets.symmetric(
+        horizontal: MinimalStyle.on ? 14 : (u ? AppMetrics.cardPadding : 12),
+        vertical: MinimalStyle.on ? 10 : (u ? 12 : 8),
       ),
+      decoration: MinimalStyle.on ? BoxDecoration(color: isHighlighted
+                  ? Color.alphaBlend(IosColors.blue.withOpacity(0.16), IosColors.card)
+                  : IosColors.card, borderRadius: BorderRadius.circular(md ? AppMetrics.cardRadius : 12), border: Border.all(color: MinimalStyle.outline)) : BoxDecoration(
+              color: isHighlighted
+                  ? Color.alphaBlend(IosColors.blue.withOpacity(0.16), IosColors.card)
+                  : IosColors.card,
+              borderRadius: BorderRadius.circular(md ? AppMetrics.cardRadius : 12),
+            ),
       foregroundDecoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(md ? AppMetrics.cardRadius : 12),
         border: Border.all(color: ringColor, width: hasRing ? 1.5 : 0.5),
       ),
       child: Row(
         children: [
           // Icono "squircle" como en Ajustes de iOS.
           Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
+            width: u ? AppMetrics.iconButton : 34,
+            height: u ? AppMetrics.iconButton : 34,
+            decoration: MinimalStyle.on ? BoxDecoration(
+              color: MinimalStyle.mutedFill,
+              borderRadius: BorderRadius.circular(MinimalStyle.controlRadius),
+            ) : BoxDecoration(
               color: enabled
                   ? IosColors.blue.withOpacity(0.18)
                   : IosColors.chip,
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(
+                md ? AppMetrics.controlRadius : 9,
+              ),
             ),
             child: Icon(
               Icons.extension_rounded,
@@ -123,7 +140,7 @@ class ModListTile extends StatelessWidget {
                     width: 7,
                     height: 7,
                     margin: const EdgeInsets.only(right: 8),
-                    decoration: const BoxDecoration(
+                    decoration: MinimalStyle.on ? BoxDecoration(color: IosColors.blue, shape: BoxShape.circle) : BoxDecoration(
                       color: IosColors.blue,
                       shape: BoxShape.circle,
                     ),
@@ -134,9 +151,9 @@ class ModListTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
+                      fontSize: MinimalStyle.on ? 14 : (u ? 15 : 13.5),
+                      fontWeight: u ? FontWeight.w700 : FontWeight.w600,
+                      letterSpacing: u ? 0 : -0.2,
                       color: enabled
                           ? IosColors.label
                           : IosColors.secondaryLabel,
@@ -151,7 +168,7 @@ class ModListTile extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.layers_rounded,
                             size: 13,
                             color: IosColors.purple,
@@ -159,7 +176,7 @@ class ModListTile extends StatelessWidget {
                           const SizedBox(width: 2),
                           Text(
                             '$editionCount',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: IosColors.purple,
@@ -174,9 +191,9 @@ class ModListTile extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 8),
                     child: Text(
                       'v${modInfo.localVersion}',
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: IosColors.secondaryLabel,
+                      style: TextStyle(
+                        fontSize: u ? 12.5 : 11.5,
+                        color: md ? IosColors.blue : IosColors.secondaryLabel,
                       ),
                     ),
                   ),
@@ -188,7 +205,7 @@ class ModListTile extends StatelessWidget {
                       height: 26,
                       tooltip: l10n.repairedModTooltip,
                       onPressed: onRepairedInfoTap,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.build_rounded,
                         size: 15,
                         color: IosColors.orange,
@@ -257,6 +274,7 @@ class ModListTile extends StatelessWidget {
             isLoading: isLoading,
             onEnable: onEnable,
             onDisable: onDisable,
+            // Con Material el interruptor siempre mide 52x32.
             scale: 0.8,
           ),
         ],

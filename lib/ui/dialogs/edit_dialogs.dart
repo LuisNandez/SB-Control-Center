@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/ios_widgets.dart';
 import '../widgets/mod_image_widgets.dart';
+import '../theme/app_metrics.dart';
 
 class EditDialogs {
   /// Libera un controlador una vez terminada la animación de salida del
@@ -223,9 +224,9 @@ class EditDialogs {
                           clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.35),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: AppMetrics.radius(10),
                             border: Border.all(
-                              color: const Color(0x1FFFFFFF),
+                              color: IosColors.overlay(0x1F),
                               width: 0.5,
                             ),
                           ),
@@ -382,7 +383,7 @@ class EditDialogs {
         decoration: BoxDecoration(
           color: IosColors.card,
           borderRadius: BorderRadius.circular(_cardRadius * scale + 2),
-          border: Border.all(color: const Color(0x1FFFFFFF), width: 0.5),
+          border: Border.all(color: IosColors.overlay(0x1F), width: 0.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -418,7 +419,7 @@ class EditDialogs {
                       width: width * 0.62,
                       decoration: BoxDecoration(
                         color: IosColors.tertiaryLabel,
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: AppMetrics.radius(3),
                       ),
                     ),
                     SizedBox(height: 8 * scale),
@@ -427,7 +428,7 @@ class EditDialogs {
                       width: width * 0.34,
                       decoration: BoxDecoration(
                         color: IosColors.chip,
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: AppMetrics.radius(3),
                       ),
                     ),
                   ],
@@ -461,11 +462,11 @@ class EditDialogs {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppMetrics.radius(12),
                     child: Container(
                       width: boxWidth,
                       height: boxHeight,
-                      decoration: const BoxDecoration(color: Color(0xFF1C1C1E)),
+                      decoration: BoxDecoration(color: IosColors.background),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final containerSize =

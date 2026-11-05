@@ -6,6 +6,8 @@ import '../models/mod_info.dart';
 import 'mod_metadata_migrator.dart';
 import 'archive_service.dart';
 import 'nexus_api_service.dart';
+import 'cover_service.dart';
+import '../thumbnail_service.dart';
 import 'package:flutter/material.dart';
 
 class ModManagerService {
@@ -159,6 +161,12 @@ class ModManagerService {
       Map<String, dynamic> data = json.decode(await infoFile.readAsString());
 
       if (data['customCoverPath'] != null && (data['customCoverPath'] as String).isNotEmpty) {
+        // Ya tiene portada: se deja en la carpeta nexus_cover y se asegura
+        // que tenga sus miniaturas (tarjeta y detalle).
+        if (await CoverService.migrateLegacyCover(modDirectory, data)) {
+          await infoFile.writeAsString(JsonEncoder.withIndent('  ').convert(data));
+        }
+        await ensureCoverThumbnails(modDirectory, data);
         return;
       }
 
@@ -170,24 +178,53 @@ class ModManagerService {
       if (imageUrl == null || imageUrl.isEmpty) return;
 
       final response = await http.get(Uri.parse(imageUrl));
-      if (response.statusCode == 200) {
-        final fileExtension = p.extension(imageUrl).isNotEmpty ? p.extension(imageUrl) : '.jpg';
-        const coverFileName = '_nexus_cover';
-        final finalFileName = '$coverFileName$fileExtension';
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        final fileExtension = p.extension(Uri.parse(imageUrl).path).isNotEmpty
+            ? p.extension(Uri.parse(imageUrl).path)
+            : '.jpg';
 
-        final coverFile = File(p.join(modDirectory.path, finalFileName));
-        await coverFile.writeAsBytes(response.bodyBytes);
+        // El original va a <mod>/nexus_cover/_nexus_cover.<ext>.
+        final String relativePath = await CoverService.storeOriginal(
+          modDirectory,
+          '_nexus_cover$fileExtension',
+          bytes: response.bodyBytes,
+        );
 
-        data['customCoverPath'] = finalFileName;
+        data['customCoverPath'] = relativePath;
         data['customCoverAlignmentX'] ??= 0.0;
         data['customCoverAlignmentY'] ??= 0.0;
 
         final encoder = JsonEncoder.withIndent('  ');
         await infoFile.writeAsString(encoder.convert(data));
         print('Portada de Nexus cacheada para ${p.basename(modDirectory.path)}');
+
+        // Miniaturas de tarjeta y de detalle (WebP) justo al instalar.
+        await ensureCoverThumbnails(modDirectory, data, force: true);
       }
     } catch (e) {
       print('No se pudo cachear la portada de Nexus para ${p.basename(modDirectory.path)}: $e');
+    }
+  }
+
+  /// Genera (si faltan o son de otra portada) la miniatura de tarjeta y la
+  /// imagen de detalle de la portada que indica [data] (`customCoverPath`).
+  /// No escribe el JSON. Devuelve true si quedaron las dos.
+  static Future<bool> ensureCoverThumbnails(
+    Directory modDirectory,
+    Map<String, dynamic> data, {
+    bool force = false,
+  }) async {
+    try {
+      final String? rel = data['customCoverPath'] as String?;
+      if (rel == null || rel.isEmpty) return false;
+      final File original = File(p.join(modDirectory.path, rel));
+      if (!CoverService.isCoverOriginalPath(original.path)) return false;
+      return await ThumbnailService().runLimited(
+        () => CoverService.ensureThumbnails(original, force: force),
+      );
+    } catch (e) {
+      print('No se pudieron generar las miniaturas de ${p.basename(modDirectory.path)}: $e');
+      return false;
     }
   }
 
@@ -576,6 +613,19 @@ class ModManagerService {
               }
 
               customCoverPath = data['customCoverPath'];
+              // Portadas de versiones anteriores (en la raíz del mod): se
+              // mueven a la carpeta nexus_cover. Solo se mueve el archivo; las
+              // miniaturas se crean cuando una tarjeta o el panel las pidan.
+              if (customCoverPath != null &&
+                  customCoverPath.isNotEmpty &&
+                  await CoverService.migrateLegacyCover(entity, data)) {
+                customCoverPath = data['customCoverPath'];
+                try {
+                  await infoFile.writeAsString(
+                    JsonEncoder.withIndent('  ').convert(data),
+                  );
+                } catch (_) {}
+              }
               if (customCoverPath != null) {
                 final coverFile = File(p.join(entity.path, customCoverPath));
                 if (await coverFile.exists()) {

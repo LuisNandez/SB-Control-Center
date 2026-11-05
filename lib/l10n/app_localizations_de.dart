@@ -29,6 +29,104 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsLanguageDesc => 'Wählen Sie die Anwendungssprache';
 
   @override
+  String get settingsTheme => 'Design';
+
+  @override
+  String get settingsThemeDesc =>
+      'Wähle das Aussehen der App. „Automatisch“ folgt dem hellen oder dunklen Modus des Systems.';
+
+  @override
+  String get themeSystem => 'Automatisch';
+
+  @override
+  String get themeDark => 'Dunkel';
+
+  @override
+  String get themeMidnight => 'Mitternacht';
+
+  @override
+  String get themeLight => 'Hell';
+
+  @override
+  String get themeOcean => 'Ozean';
+
+  @override
+  String get themeForest => 'Wald';
+
+  @override
+  String get themeViolet => 'Violett';
+
+  @override
+  String get themeSand => 'Sand';
+
+  @override
+  String get themeCocoa => 'Kakao';
+
+  @override
+  String get settingsAppearance => 'Darstellung';
+
+  @override
+  String get settingsLayout => 'Layout';
+
+  @override
+  String get settingsLayoutDesc =>
+      'Wähle das Layout des Hauptfensters: macOS-Stil (transparent und abgerundet), Material mit größeren Karten oder Flach (klar, mit feinen Linien). Wird sofort angewendet.';
+
+  @override
+  String get layoutMacos => 'macOS-Stil';
+
+  @override
+  String get layoutMaterial => 'Material';
+
+  @override
+  String get layoutFlat => 'Flach';
+
+  @override
+  String get settingsGpuAccel => 'Grafikkarte verwenden';
+
+  @override
+  String get settingsGpuAccelDesc =>
+      'Bevorzugt die dedizierte GPU, falls vorhanden';
+
+  @override
+  String get settingsGpuAccelFooter =>
+      'Weist Windows an, die App mit der Hochleistungsgrafik auszuführen – nützlich bei Notebooks mit integrierter und dedizierter Grafik. Hat der PC nur eine Grafikkarte, ändert sich nichts. Wird nach einem Neustart der App wirksam.';
+
+  @override
+  String get settingsGpuAccelRestart =>
+      'App neu starten, um die Änderung zu übernehmen';
+
+  @override
+  String get settingsGpuAccelFailed =>
+      'Die Grafikeinstellung von Windows konnte nicht geändert werden';
+
+  @override
+  String get settingsGpuAccelSingle => 'Dein PC hat nur eine Grafikkarte';
+
+  @override
+  String get settingsGpuRestartTitle => 'Jetzt neu starten?';
+
+  @override
+  String get settingsGpuRestartMsg =>
+      'Um die Grafikänderung zu übernehmen, wird die App geschlossen und automatisch wieder geöffnet.';
+
+  @override
+  String get settingsGpuRestartNow => 'Jetzt neu starten';
+
+  @override
+  String get settingsGpuRestartLater => 'Später';
+
+  @override
+  String get ecoModeTitle => 'Sparmodus';
+
+  @override
+  String get ecoModeMessage =>
+      'Stellar Blade läuft. Die App verbraucht so wenig Ressourcen wie möglich und kehrt automatisch zum Normalbetrieb zurück, sobald du das Spiel beendest.';
+
+  @override
+  String get ecoModeShowApp => 'App trotzdem anzeigen';
+
+  @override
   String get settingsAbout => 'Über';
 
   @override
@@ -1174,89 +1272,111 @@ class AppLocalizationsDe extends AppLocalizations {
   String get devSelfUpdateRestarting => 'Neustart…';
 
   @override
-  String get appUpdateAvailableTitle => 'Update available';
+  String get appUpdateAvailableTitle => 'Update verfügbar';
 
   @override
   String get appUpdateAvailableMsg =>
-      'The app will download the update, install it and restart automatically.';
+      'Die App lädt das Update herunter, installiert es und startet automatisch neu.';
 
   @override
-  String get appUpdateInstalledLabel => 'INSTALLED';
+  String get appUpdateInstalledLabel => 'INSTALLIERT';
 
   @override
-  String get appUpdateAvailableLabel => 'AVAILABLE';
+  String get appUpdateAvailableLabel => 'VERFÜGBAR';
 
   @override
   String appUpdateDownloadSize(String size) {
-    return 'Download size: $size';
+    return 'Downloadgröße: $size';
   }
 
   @override
-  String get appUpdateNow => 'Update now';
+  String get appUpdateNow => 'Jetzt aktualisieren';
 
   @override
-  String get appUpdateLater => 'Later';
+  String get appUpdateLater => 'Später';
 
   @override
-  String get appUpdateSkip => 'Skip this version';
+  String get appUpdateSkip => 'Diese Version überspringen';
 
   @override
-  String get appUpdateDownloading => 'Downloading update…';
+  String get appUpdateDownloading => 'Update wird heruntergeladen…';
 
   @override
-  String get appUpdateUpToDate => 'You already have the latest version';
+  String get appUpdateUpToDate => 'Du hast bereits die neueste Version';
 
   @override
-  String get appUpdateCheckFailed => 'Could not check for updates';
+  String get appUpdateCheckFailed => 'Updates konnten nicht geprüft werden';
 
   @override
-  String get settingsCheckAppUpdate => 'Check for app updates';
+  String get settingsCheckAppUpdate => 'Nach App-Updates suchen';
 
   @override
   String get settingsCheckAppUpdateDesc =>
-      'Look for a new version of SB Control Center on GitHub';
+      'Auf GitHub nach einer neuen Version von SB Control Center suchen';
 
   @override
-  String get settingsChangelog => 'Changelog';
+  String get settingsChangelog => 'Änderungsprotokoll';
 
   @override
-  String get settingsChangelogDesc => 'See what\'s new in each version';
+  String get settingsChangelogDesc =>
+      'Sieh dir an, was in jeder Version neu ist';
 
   @override
   String changelogWhatsNewTitle(String version) {
-    return 'What\'s new in $version';
+    return 'Neu in $version';
   }
 
   @override
   String get changelogUpdatedSubtitle =>
-      'SB Control Center was updated successfully';
+      'SB Control Center wurde erfolgreich aktualisiert';
 
   @override
-  String get changelogHistoryTitle => 'Changelog';
+  String get changelogHistoryTitle => 'Änderungsprotokoll';
 
   @override
   String changelogInstalledVersion(String version) {
-    return 'Installed version: $version';
+    return 'Installierte Version: $version';
   }
 
   @override
-  String get changelogInstalledBadge => 'Installed';
+  String get changelogInstalledBadge => 'Installiert';
 
   @override
-  String get changelogPrereleaseBadge => 'Pre-release';
+  String get changelogPrereleaseBadge => 'Vorabversion';
 
   @override
-  String get changelogEmpty => 'This release has no notes.';
+  String get changelogEmpty => 'Diese Version hat keine Notizen.';
 
   @override
-  String get changelogViewOnGithub => 'View on GitHub';
+  String get changelogViewOnGithub => 'Auf GitHub ansehen';
 
   @override
   String get changelogLoadFailed =>
-      'Could not load the changelog. Check your connection.';
+      'Das Änderungsprotokoll konnte nicht geladen werden. Prüfe deine Verbindung.';
 
   @override
-  String get changelogRetry => 'Retry';
+  String get changelogRetry => 'Erneut versuchen';
+
+  @override
+  String get settingsSkippedAppVersion => 'App-Update übersprungen';
+
+  @override
+  String settingsSkippedAppVersionDesc(String version) {
+    return 'Version $version ist ausgeblendet. Tippe, um wieder darüber benachrichtigt zu werden.';
+  }
+
+  @override
+  String appUpdateSkippedTitle(String version) {
+    return 'Version $version übersprungen';
+  }
+
+  @override
+  String get appUpdateSkippedDesc =>
+      'Du kannst das unter Einstellungen › Konnektivität & Updates rückgängig machen.';
+
+  @override
+  String get appUpdateUnskippedTitle =>
+      'Du wirst wieder über App-Updates benachrichtigt';
 
   @override
   String get devExtractNoData =>

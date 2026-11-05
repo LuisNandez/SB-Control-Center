@@ -29,6 +29,105 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsLanguageDesc => 'Elige el idioma de la aplicación';
 
   @override
+  String get settingsTheme => 'Tema';
+
+  @override
+  String get settingsThemeDesc =>
+      'Elige la apariencia de la aplicación. «Automático» sigue el modo claro u oscuro del sistema.';
+
+  @override
+  String get themeSystem => 'Automático';
+
+  @override
+  String get themeDark => 'Oscuro';
+
+  @override
+  String get themeMidnight => 'Medianoche';
+
+  @override
+  String get themeLight => 'Claro';
+
+  @override
+  String get themeOcean => 'Océano';
+
+  @override
+  String get themeForest => 'Bosque';
+
+  @override
+  String get themeViolet => 'Violeta';
+
+  @override
+  String get themeSand => 'Arena';
+
+  @override
+  String get themeCocoa => 'Cacao';
+
+  @override
+  String get settingsAppearance => 'Apariencia';
+
+  @override
+  String get settingsLayout => 'Diseño';
+
+  @override
+  String get settingsLayoutDesc =>
+      'Elige el diseño de la ventana principal: Estilo macOS (translúcido y redondeado), Material con tarjetas más grandes o Plano (limpio y de líneas finas). Se aplica al instante.';
+
+  @override
+  String get layoutMacos => 'Estilo macOS';
+
+  @override
+  String get layoutMaterial => 'Material';
+
+  @override
+  String get layoutFlat => 'Plano';
+
+  @override
+  String get settingsGpuAccel => 'Usar la tarjeta gráfica';
+
+  @override
+  String get settingsGpuAccelDesc =>
+      'Prefiere la GPU dedicada si tu equipo tiene una';
+
+  @override
+  String get settingsGpuAccelFooter =>
+      'Le pide a Windows que ejecute la app con la gráfica de alto rendimiento, útil en portátiles con gráfica integrada y dedicada. Si tu equipo solo tiene una gráfica, no cambia nada. Se aplica al reiniciar la app.';
+
+  @override
+  String get settingsGpuAccelRestart =>
+      'Reinicia la app para aplicar el cambio';
+
+  @override
+  String get settingsGpuAccelFailed =>
+      'No se pudo cambiar la preferencia de gráficos de Windows';
+
+  @override
+  String get settingsGpuAccelSingle =>
+      'Tu equipo solo tiene una tarjeta gráfica';
+
+  @override
+  String get settingsGpuRestartTitle => '¿Reiniciar ahora?';
+
+  @override
+  String get settingsGpuRestartMsg =>
+      'Para aplicar el cambio de gráfica, la app se cerrará y se volverá a abrir automáticamente.';
+
+  @override
+  String get settingsGpuRestartNow => 'Reiniciar ahora';
+
+  @override
+  String get settingsGpuRestartLater => 'Más tarde';
+
+  @override
+  String get ecoModeTitle => 'Modo ahorro';
+
+  @override
+  String get ecoModeMessage =>
+      'Stellar Blade está en ejecución. La app usa el mínimo de recursos posible y volverá a la normalidad sola cuando cierres el juego.';
+
+  @override
+  String get ecoModeShowApp => 'Mostrar la app igualmente';
+
+  @override
   String get settingsAbout => 'Acerca de';
 
   @override
@@ -1254,6 +1353,27 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get changelogRetry => 'Reintentar';
+
+  @override
+  String get settingsSkippedAppVersion => 'Actualización omitida';
+
+  @override
+  String settingsSkippedAppVersionDesc(String version) {
+    return 'La versión $version está oculta. Toca para volver a recibir el aviso.';
+  }
+
+  @override
+  String appUpdateSkippedTitle(String version) {
+    return 'Versión $version omitida';
+  }
+
+  @override
+  String get appUpdateSkippedDesc =>
+      'Puedes deshacerlo en Ajustes → Conectividad y actualizaciones.';
+
+  @override
+  String get appUpdateUnskippedTitle =>
+      'Volverás a recibir avisos de actualización de la app';
 
   @override
   String get devExtractNoData =>

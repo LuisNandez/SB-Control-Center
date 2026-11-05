@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
+import '../theme/description_colors.dart';
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class BBCodeRenderer extends StatefulWidget {
   final String data;
   final TextStyle? defaultStyle;
+  final Color? readabilityBackground;
 
-  const BBCodeRenderer({super.key, required this.data, this.defaultStyle});
+  /// Si es true, los bloques se montan por tandas (unos cuantos por fotograma,
+  /// de arriba abajo) en vez de todos de golpe. Una descripción larga con
+  /// muchas imágenes y texto deja de bloquear el fotograma en que aparece.
+  final bool progressive;
+
+  const BBCodeRenderer({
+    super.key, required this.data, this.defaultStyle,
+    this.readabilityBackground,
+    this.progressive = false,
+  });
 
   @override
   State<BBCodeRenderer> createState() => _BBCodeRendererState();
@@ -31,7 +42,8 @@ class _BBCodeRendererState extends State<BBCodeRenderer> {
   void didUpdateWidget(covariant BBCodeRenderer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data != widget.data ||
-        oldWidget.defaultStyle != widget.defaultStyle) {
+        oldWidget.defaultStyle != widget.defaultStyle ||
+        oldWidget.readabilityBackground != widget.readabilityBackground) {
       _dirty = true;
     }
   }
@@ -76,7 +88,8 @@ class _BBCodeRendererState extends State<BBCodeRenderer> {
   @override
   Widget build(BuildContext context) {
     if (_dirty) _rebuildChildren();
-    return Column(
+    return _ProgressiveColumn(
+      enabled: widget.progressive,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: _children,
     );
@@ -98,14 +111,21 @@ class _BBCodeRendererState extends State<BBCodeRenderer> {
         if (lowerCaseMatch.startsWith('[center]')) {
           final content = matchText.substring(8, matchText.length - 9);
           widgets.add(
-            Center(child: Column(children: _parseBBCode(context, content))),
+            Center(
+              child: _ProgressiveColumn(
+                enabled: widget.progressive,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: _parseBBCode(context, content),
+              ),
+            ),
           );
         } else if (lowerCaseMatch.startsWith('[left]')) {
           final content = matchText.substring(6, matchText.length - 7);
           widgets.add(
             Align(
               alignment: Alignment.centerLeft,
-              child: Column(
+              child: _ProgressiveColumn(
+                enabled: widget.progressive,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: _parseBBCode(context, content),
               ),
@@ -270,7 +290,9 @@ class _BBCodeRendererState extends State<BBCodeRenderer> {
             case 'color':
               final color = _hexToColor(tagValue);
               if (color != null) {
-                currentStyle = currentStyle.copyWith(color: color);
+                currentStyle = currentStyle.copyWith(
+                  color: readableDescriptionColor(color, widget.readabilityBackground),
+                );
               }
               break;
             case 'size':
@@ -295,7 +317,9 @@ class _BBCodeRendererState extends State<BBCodeRenderer> {
                 _recognizers.add(recognizer);
                 currentRecognizer = recognizer;
                 currentStyle = currentStyle.copyWith(
-                  color: Colors.lightBlueAccent,
+                  color: readableDescriptionColor(
+                    Colors.lightBlueAccent, widget.readabilityBackground,
+                  ),
                   decoration: TextDecoration.underline,
                 );
               }
@@ -335,13 +359,35 @@ class _BBCodeRendererState extends State<BBCodeRenderer> {
     );
   }
 
-  Color? _hexToColor(String? hex) {
-    if (hex == null) return null;
-    final hexString = hex.startsWith('#') ? hex.substring(1) : hex;
-    if (hexString.length == 6) {
-      return Color(int.parse('FF$hexString', radix: 16));
-    }
-    return null;
+  Color? _hexToColor(String? value) {
+    if (value == null) return null;
+    final text = value.trim().replaceAll('"', '').replaceAll("'", '').toLowerCase();
+    const named = <String, Color>{
+      'white': Colors.white,
+      'black': Colors.black,
+      'gray': Color(0xFF808080),
+      'grey': Color(0xFF808080),
+      'silver': Color(0xFFC0C0C0),
+      'lightgray': Color(0xFFD3D3D3),
+      'lightgrey': Color(0xFFD3D3D3),
+      'whitesmoke': Color(0xFFF5F5F5),
+      'ivory': Color(0xFFFFFFF0),
+      'yellow': Color(0xFFFFFF00),
+      'orange': Color(0xFFFFA500),
+      'red': Color(0xFFFF0000),
+      'green': Color(0xFF008000),
+      'blue': Color(0xFF0000FF),
+      'cyan': Color(0xFF00FFFF),
+      'lightblue': Color(0xFFADD8E6),
+      'pink': Color(0xFFFFC0CB),
+      'purple': Color(0xFF800080),
+    };
+    if (named.containsKey(text)) return named[text];
+    var hex = text.startsWith('#') ? text.substring(1) : text;
+    if (hex.length == 3) hex = hex.split('').map((c) => c + c).join();
+    if (!RegExp(r'^[0-9a-f]{6}$').hasMatch(hex)) return null;
+    final rgb = int.tryParse(hex, radix: 16);
+    return rgb == null ? null : Color(0xFF000000 | rgb);
   }
 
   double? _sizeToFontSize(String? size) {
@@ -358,5 +404,66 @@ class _BBCodeRendererState extends State<BBCodeRenderer> {
       case 7: return 32.0;
       default: return 14.0;
     }
+  }
+}
+
+/// Columna que, con [enabled], va añadiendo sus hijos por tandas: los primeros
+/// al instante y el resto unos pocos por fotograma. Los hijos ya mostrados no
+/// se tocan (se añade siempre por el final), así que el contenido de arriba
+/// no se mueve mientras llega el de abajo.
+class _ProgressiveColumn extends StatefulWidget {
+  const _ProgressiveColumn({
+    required this.children,
+    required this.crossAxisAlignment,
+    this.enabled = true,
+  });
+
+  final List<Widget> children;
+  final CrossAxisAlignment crossAxisAlignment;
+  final bool enabled;
+
+  @override
+  State<_ProgressiveColumn> createState() => _ProgressiveColumnState();
+}
+
+class _ProgressiveColumnState extends State<_ProgressiveColumn> {
+  static const int _firstBatch = 3;
+  static const int _batchSize = 3;
+
+  late int _visible = widget.enabled
+      ? (widget.children.length < _firstBatch
+            ? widget.children.length
+            : _firstBatch)
+      : widget.children.length;
+  bool _scheduled = false;
+
+  void _scheduleMore() {
+    if (_scheduled) return;
+    _scheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      if (!mounted) return;
+      final int total = widget.children.length;
+      setState(() {
+        final int next = _visible + _batchSize;
+        _visible = next > total ? total : next;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int total = widget.children.length;
+    if (!widget.enabled || _visible >= total) {
+      return Column(
+        crossAxisAlignment: widget.crossAxisAlignment,
+        children: widget.children,
+      );
+    }
+    _scheduleMore();
+    return Column(
+      crossAxisAlignment: widget.crossAxisAlignment,
+      children: widget.children.sublist(0, _visible),
+    );
   }
 }
