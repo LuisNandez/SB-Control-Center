@@ -717,6 +717,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sortByDate => '日付';
 
   @override
+  String get sortByCustom => '手動';
+
+  @override
+  String get sortByCustomHint => 'MODをドラッグして並べ替え';
+
+  @override
   String get noModsFound => 'MODが見つかりません。';
 
   @override

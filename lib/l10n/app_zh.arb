@@ -205,6 +205,8 @@
     "filterRepaired": "已修复",
     "sortByName": "名称",
     "sortByDate": "日期",
+    "sortByCustom": "手动",
+    "sortByCustomHint": "拖动模组以重新排序",
     "noModsFound": "未找到模组。",
     "viewTypeGrid": "网格视图",
     "viewTypeList": "列表视图",

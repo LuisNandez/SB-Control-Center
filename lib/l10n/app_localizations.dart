@@ -1344,6 +1344,18 @@ abstract class AppLocalizations {
   /// **'Date'**
   String get sortByDate;
 
+  /// No description provided for @sortByCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get sortByCustom;
+
+  /// No description provided for @sortByCustomHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag mods to reorder them'**
+  String get sortByCustomHint;
+
   /// No description provided for @noModsFound.
   ///
   /// In en, this message translates to:

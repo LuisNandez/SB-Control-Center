@@ -205,6 +205,8 @@
     "filterRepaired": "Repariert",
     "sortByName": "Name",
     "sortByDate": "Datum",
+    "sortByCustom": "Manuell",
+    "sortByCustomHint": "Mods per Drag & Drop neu anordnen",
     "noModsFound": "Keine Mods gefunden.",
     "viewTypeGrid": "Rasteransicht",
     "viewTypeList": "Listenansicht",

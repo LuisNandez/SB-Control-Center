@@ -205,6 +205,8 @@
     "filterRepaired": "Восстановленные",
     "sortByName": "Имя",
     "sortByDate": "Дата",
+    "sortByCustom": "Вручную",
+    "sortByCustomHint": "Перетаскивайте моды, чтобы изменить порядок",
     "noModsFound": "Моды не найдены.",
     "viewTypeGrid": "Вид сеткой",
     "viewTypeList": "Вид списком",

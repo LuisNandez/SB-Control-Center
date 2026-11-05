@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' show ImageFilter, FontFeature;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
@@ -36,6 +37,7 @@ import 'services/cover_service.dart';
 import 'services/game_locator_service.dart';
 import 'services/gpu_preference_service.dart';
 import 'services/eco_mode_service.dart';
+import 'services/window_state_service.dart';
 import 'ui/widgets/mod_grid_card.dart';
 import 'ui/widgets/mod_list_tile.dart';
 import 'ui/widgets/mod_details_panel.dart';
@@ -89,6 +91,7 @@ import 'services/hd_atool_audio_service.dart';
 import 'ui/theme/app_metrics.dart';
 import 'ui/widgets/app_title_bar.dart';
 import 'ui/widgets/eco_mode_layer.dart';
+import 'ui/widgets/reposition_animator.dart';
 
 final StreamController<String> multiInstanceLinkStream = StreamController<String>.broadcast();
 
@@ -123,10 +126,19 @@ void main(List<String> args) async {
     },
   );
 
-  WindowOptions windowOptions = const WindowOptions(
-    minimumSize: Size(680, 700),
-    size: Size(1100, 700),
-    center: true,
+  // Preferencias: se leen ANTES de crear la ventana (tamaño guardado, tema...).
+  final startupPrefs = await SharedPreferences.getInstance();
+
+  // "Recordar tamaño y posición de la ventana" (Ajustes → Apariencia): si está
+  // activada y hay un estado guardado válido, la ventana nace donde se dejó.
+  final WindowStartupState? savedWindow =
+      await WindowStateService.loadForStartup(startupPrefs);
+  final Rect? savedBounds = savedWindow?.bounds;
+
+  WindowOptions windowOptions = WindowOptions(
+    minimumSize: WindowStateService.minimumSize,
+    size: savedBounds?.size ?? const Size(1100, 700),
+    center: savedBounds == null,
     title: 'SB Control Center',
     titleBarStyle: TitleBarStyle.hidden,
     windowButtonVisibility: false,
@@ -134,10 +146,14 @@ void main(List<String> args) async {
 
   // Aplica tamaño/posición con la ventana aún oculta (sin callback = no la muestra).
   await windowManager.waitUntilReadyToShow(windowOptions);
+  if (savedBounds != null) {
+    try {
+      await windowManager.setPosition(savedBounds.topLeft);
+    } catch (_) {}
+  }
 
   // Tema elegido por el usuario: se lee ANTES de abrir la ventana para que la
   // app arranque ya con sus colores (sin parpadeo del tema por defecto).
-  final startupPrefs = await SharedPreferences.getInstance();
   final AppThemeId startupTheme =
       AppThemes.parse(startupPrefs.getString(AppPrefs.themeId));
 
@@ -159,8 +175,18 @@ void main(List<String> args) async {
 
   // Mostrar SOLO cuando Flutter ya pintó el primer frame con el tamaño final.
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // Si la ventana estaba maximizada la última vez, se maximiza antes de
+    // mostrarla (el tamaño normal guardado se conserva para al restaurarla).
+    if (savedWindow?.maximized == true) {
+      try {
+        await windowManager.maximize();
+        WindowChrome.maximized.value = await windowManager.isMaximized();
+      } catch (_) {}
+    }
     await windowManager.show();
     await windowManager.focus();
+    // A partir de aquí, cada cambio de tamaño/posición se guarda solo.
+    WindowStateService.startTracking();
   });
 }
 
@@ -438,6 +464,25 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
   ModFilter _currentFilter = ModFilter.all;
   ModTypeFilter _currentModTypeFilter = ModTypeFilter.all;
   ModSort _currentSort = ModSort.date;
+
+  // --- Orden manual (ModSort.custom) ---
+  /// Claves (nombre de carpeta) de los mods en el orden elegido por el usuario.
+  /// Se persiste en [AppPrefs.customModOrder]. Puede contener claves de mods
+  /// que ahora no están cargados: así recuperan su sitio si vuelven.
+  List<String> _customOrder = [];
+  final GlobalKey _modsViewKey = GlobalKey();
+  Timer? _dragScrollTimer;
+  Offset? _dragPointer;
+  bool _isReorderDragging = false;
+  /// Clave del mod que se está arrastrando (null si no hay arrastre).
+  String? _dragKey;
+  /// Orden provisional mientras se arrastra: los demás mods se apartan en vivo
+  /// para mostrar dónde caerá el arrastrado. Se confirma al soltar.
+  List<String>? _previewOrder;
+  /// Activa la animación de desplazamiento de las tarjetas (durante el
+  /// arrastre y un instante después de soltar).
+  bool _reorderAnimActive = false;
+  Timer? _reorderAnimTimer;
   ModListViewMode _viewMode = ModListViewMode.grid;
   bool _showModTypeTags = true;
   bool _autoAssignOutfits = true; // Ajustes: asignación automática de trajes
@@ -506,6 +551,8 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     _gameWatcher?.cancel();
     DownloadManager.instance.removeListener(_evaluateEcoMode);
     WindowChrome.focused.removeListener(_onWindowFocusForEco);
+    _dragScrollTimer?.cancel();
+    _reorderAnimTimer?.cancel();
     _hoverTimer?.cancel();
     _previewOverlay?.remove();
     try {
@@ -1163,8 +1210,10 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
         prefs.getInt(AppPrefs.viewMode) ?? ModListViewMode.grid.index;
     final showTags = prefs.getBool(AppPrefs.showModTypeTags) ?? true;
     final autoOutfits = prefs.getBool(AppPrefs.autoAssignOutfits) ?? true;
+    final customOrder = prefs.getStringList(AppPrefs.customModOrder) ?? <String>[];
 
     setState(() {
+      _customOrder = customOrder;
       _currentFilter = ModFilter.values[filterIndex];
       _currentModTypeFilter = ModTypeFilter.values[modTypeFilterIndex];
       _currentSort = ModSort.values[sortIndex];
@@ -6369,6 +6418,241 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     );
   }
 
+  // ---------------------------------------------------------------------------
+  //  ORDEN MANUAL (arrastrar y soltar)
+  // ---------------------------------------------------------------------------
+
+  /// Clave estable de un mod en el orden manual: el nombre de su carpeta. No
+  /// cambia al activar/desactivar (el mod solo cambia de directorio padre).
+  String _modOrderKey(ModInfo mod) => p.basename(mod.directory.path);
+
+  int _compareByDateThenName(ModInfo a, ModInfo b) {
+    final d = b.lastModified.compareTo(a.lastModified);
+    if (d != 0) return d;
+    return a.customName.toLowerCase().compareTo(b.customName.toLowerCase());
+  }
+
+  /// Orden manual completo: los mods que aún no tienen sitio asignado (recién
+  /// instalados, o anteriores a esta función) van arriba, del más reciente al
+  /// más antiguo; después, los ya ordenados por el usuario.
+  List<String> _normalizedCustomOrder() {
+    final known = _customOrder.toSet();
+    final fresh = _allMods
+        .where((m) => !known.contains(_modOrderKey(m)))
+        .toList()
+      ..sort(_compareByDateThenName);
+    final result = <String>[];
+    final seen = <String>{};
+    for (final key in [...fresh.map(_modOrderKey), ..._customOrder]) {
+      if (seen.add(key)) result.add(key);
+    }
+    return result;
+  }
+
+  Future<void> _saveCustomOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(AppPrefs.customModOrder, _customOrder);
+    } catch (e) {
+      print('No se pudo guardar el orden manual: $e');
+    }
+  }
+
+  /// Al elegir "Manual" por primera vez, parte del orden que el usuario veía
+  /// hasta ahora para que la lista no salte.
+  void _seedCustomOrderFrom(ModSort previous) {
+    if (_customOrder.isNotEmpty) return;
+    final mods = List<ModInfo>.from(_allMods);
+    if (previous == ModSort.name) {
+      mods.sort((a, b) =>
+          a.customName.toLowerCase().compareTo(b.customName.toLowerCase()));
+    } else {
+      mods.sort(_compareByDateThenName);
+    }
+    _customOrder = mods.map(_modOrderKey).toSet().toList();
+  }
+
+  /// Empieza un arrastre: a partir de aquí el orden mostrado es provisional.
+  void _beginReorderDrag(String key) {
+    _dragKey = key;
+    _previewOrder = _normalizedCustomOrder();
+    _reorderAnimActive = true;
+    _reorderAnimTimer?.cancel();
+    _startDragAutoScroll();
+  }
+
+  /// Vista previa en vivo: coloca el mod arrastrado en el sitio de [toKey] y
+  /// los demás se apartan (con animación) para dejarle hueco.
+  void _previewMove(String fromKey, String toKey) {
+    if (fromKey == toKey) return;
+    final order = List<String>.from(_previewOrder ?? _normalizedCustomOrder());
+    final from = order.indexOf(fromKey);
+    final to = order.indexOf(toKey);
+    if (from < 0 || to < 0 || from == to) return;
+    order.removeAt(from);
+    order.insert(to, fromKey);
+    setState(() => _previewOrder = order);
+  }
+
+  /// Al soltar: el orden provisional pasa a ser el definitivo y se guarda.
+  /// Es seguro llamarlo varias veces (solo actúa la primera).
+  void _commitReorderPreview() {
+    if (_dragKey == null) return;
+    final preview = _previewOrder;
+    _dragKey = null;
+    _previewOrder = null;
+
+    // Deja animar un instante más y luego apaga la animación (así no se anima
+    // el reajuste de la cuadrícula al cambiar el tamaño de la ventana).
+    _reorderAnimTimer?.cancel();
+    _reorderAnimTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() => _reorderAnimActive = false);
+    });
+
+    if (!mounted) return;
+    if (preview == null || listEquals(preview, _normalizedCustomOrder())) {
+      setState(() {}); // vuelve a pintar con el orden real
+      return;
+    }
+
+    // Poda las claves de mods que ya no existen si se acumulan demasiadas.
+    if (preview.length > _allMods.length + 200) {
+      final present = _allMods.map(_modOrderKey).toSet();
+      preview.retainWhere(present.contains);
+    }
+    setState(() => _customOrder = preview);
+    _saveCustomOrder();
+  }
+
+  void _startDragAutoScroll() {
+    _isReorderDragging = true;
+    _hidePreviewOverlay();
+    _dragScrollTimer?.cancel();
+    _dragScrollTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      final pointer = _dragPointer;
+      if (!_isReorderDragging || pointer == null) return;
+      final box = _modsViewKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) return;
+      final local = box.globalToLocal(pointer);
+      const edge = 70.0;
+      double factor = 0;
+      if (local.dy < edge) {
+        factor = -((edge - local.dy) / edge);
+      } else if (local.dy > box.size.height - edge) {
+        factor = (local.dy - (box.size.height - edge)) / edge;
+      }
+      if (factor == 0) return;
+      final controller = _viewMode == ModListViewMode.grid
+          ? _gridScrollController
+          : _listScrollController;
+      if (!controller.hasClients) return;
+      final position = controller.position;
+      final target = (position.pixels + factor.clamp(-1.0, 1.0) * 18)
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      if (target != position.pixels) position.jumpTo(target);
+    });
+  }
+
+  void _stopDragAutoScroll() {
+    _isReorderDragging = false;
+    _dragPointer = null;
+    _dragScrollTimer?.cancel();
+    _dragScrollTimer = null;
+    _commitReorderPreview();
+  }
+
+  /// En modo manual envuelve la tarjeta/fila para poder arrastrarla y soltarla
+  /// sobre otra. En el resto de modos devuelve [child] tal cual.
+  Widget _maybeReorderable(ModInfo mod, Widget child, {required bool grid}) {
+    if (_currentSort != ModSort.custom) return child;
+    final key = _modOrderKey(mod);
+    final radius = AppMetrics.radius(grid ? 12 : 10);
+    final bool desktop =
+        Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
+    // RepositionAnimator (por fuera) desliza la tarjeta hasta su nuevo sitio
+    // cada vez que el orden provisional cambia; la Key permite que conserve su
+    // estado al cambiar de índice (ver findChildIndexCallback en la lista).
+    return RepositionAnimator(
+      key: ValueKey('reorder-${mod.directory.path}'),
+      reference: _modsViewKey,
+      scrollController: grid ? _gridScrollController : _listScrollController,
+      enabled: _reorderAnimActive,
+      child: DragTarget<String>(
+        // Vista previa en vivo: al pasar por encima de otro mod, el arrastrado
+        // ocupa su sitio y los demás se apartan. Se devuelve false a propósito:
+        // el orden se confirma al soltar (_commitReorderPreview), no aquí.
+        onWillAcceptWithDetails: (d) {
+          if (d.data != key) _previewMove(d.data, key);
+          return false;
+        },
+        builder: (context, _, __) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              // Lo que sigue al puntero: algo más grande y con sombra.
+              final feedback = Material(
+                color: Colors.transparent,
+                elevation: 14,
+                borderRadius: radius,
+                child: Transform.scale(
+                  scale: 1.04,
+                  child: Opacity(
+                    opacity: 0.95,
+                    child: IgnorePointer(
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        height: constraints.hasBoundedHeight
+                            ? constraints.maxHeight
+                            : null,
+                        child: child,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+              // El hueco donde caerá el mod: atenuado y con marco azul.
+              final whenDragging = Stack(
+                children: [
+                  Opacity(opacity: 0.2, child: child),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: radius,
+                          color: IosColors.blue.withOpacity(0.08),
+                          border: Border.all(color: IosColors.blue, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+
+              return desktop
+                  ? Draggable<String>(
+                      data: key,
+                      feedback: feedback,
+                      childWhenDragging: whenDragging,
+                      onDragStarted: () => _beginReorderDrag(key),
+                      onDragEnd: (_) => _stopDragAutoScroll(),
+                      child: child,
+                    )
+                  : LongPressDraggable<String>(
+                      data: key,
+                      feedback: feedback,
+                      childWhenDragging: whenDragging,
+                      onDragStarted: () => _beginReorderDrag(key),
+                      onDragEnd: (_) => _stopDragAutoScroll(),
+                      child: child,
+                    );
+            },
+          );
+        },
+      ),
+    );
+  }
+
   List<ModInfo> _getFilteredAndSortedMods(AppLocalizations l10n) {
     List<ModInfo> mods = List.from(_allMods);
 
@@ -6453,6 +6737,18 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
 
     // --- 4. APLICA EL ORDENAMIENTO ---
     switch (_currentSort) {
+      case ModSort.custom:
+        final order = _previewOrder ?? _normalizedCustomOrder();
+        final position = <String, int>{};
+        for (var i = 0; i < order.length; i++) {
+          position.putIfAbsent(order[i], () => i);
+        }
+        mods.sort(
+          (a, b) => (position[_modOrderKey(a)] ?? 0).compareTo(
+            position[_modOrderKey(b)] ?? 0,
+          ),
+        );
+        break;
       case ModSort.name:
         mods.sort(
           (a, b) =>
@@ -6985,6 +7281,15 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
     final bool hasEnabledModsInView = mods.any((mod) => mod.isEnabled);
     final bool hasDisabledModsInView = mods.any((mod) => !mod.isEnabled);
 
+    // Para que, al reordenar, cada tarjeta conserve su estado (y su animación)
+    // al cambiar de índice: se localiza por su Key en la lista actual.
+    final Map<String, int> modIndexByKey = {
+      for (var i = 0; i < mods.length; i++)
+        'reorder-${mods[i].directory.path}': i,
+    };
+    int? findIndexByKey(Key key) =>
+        key is ValueKey<String> ? modIndexByKey[key.value] : null;
+
     // Mismo orden que el enum ModTypeFilter
     final typeLabels = <ModTypeFilter, String>{
       ModTypeFilter.all: l10n.filterAll,
@@ -7090,15 +7395,31 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
             ),
             IosMenuButton<ModSort>(
               tooltip: l10n.sortBy,
-              icon: HugeIcon(icon: HugeIcons.strokeRoundedSorting01, color: IosColors.icon, size: 20.0),
+              icon: HugeIcon(
+                icon: HugeIcons.strokeRoundedSorting01,
+                color: _currentSort == ModSort.custom ? IosColors.blue : IosColors.icon,
+                size: 20.0,
+              ),
               onSelected: (ModSort result) async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setInt(AppPrefs.sortMode, result.index);
-                setState(() => _currentSort = result);
+                final seeded = _customOrder.isEmpty;
+                setState(() {
+                  if (result == ModSort.custom) {
+                    _seedCustomOrderFrom(_currentSort);
+                    _statusMessage = l10n.sortByCustomHint;
+                    _statusColor = Colors.white;
+                  }
+                  _currentSort = result;
+                });
+                if (result == ModSort.custom && seeded) {
+                  await _saveCustomOrder();
+                }
               },
               itemBuilder: (context) => [
                 iosMenuItem<ModSort>(value: ModSort.date, label: l10n.sortByDate, selected: _currentSort == ModSort.date),
                 iosMenuItem<ModSort>(value: ModSort.name, label: l10n.sortByName, selected: _currentSort == ModSort.name),
+                iosMenuItem<ModSort>(value: ModSort.custom, label: l10n.sortByCustom, selected: _currentSort == ModSort.custom),
               ],
             ),
             IosToolbarButton(
@@ -7222,7 +7543,17 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                     ],
                   ),
                 )
-              : AnimatedSwitcher(
+              : Listener(
+                  key: _modsViewKey,
+                  // Sigue al puntero durante un arrastre (autoscroll en los
+                  // bordes) y lo detiene al soltar, aunque la tarjeta de
+                  // origen ya se haya descartado al hacer scroll.
+                  onPointerMove: (e) {
+                    if (_isReorderDragging) _dragPointer = e.position;
+                  },
+                  onPointerUp: (_) => _stopDragAutoScroll(),
+                  onPointerCancel: (_) => _stopDragAutoScroll(),
+                  child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: _viewMode == ModListViewMode.grid
                       ? GridView.builder(
@@ -7255,8 +7586,13 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                                   mainAxisSpacing: 14,
                                 ),
                           itemCount: mods.length,
+                          findChildIndexCallback: findIndexByKey,
                           itemBuilder: (context, index) {
-                            return _buildModGridCard(mods[index], l10n);
+                            return _maybeReorderable(
+                              mods[index],
+                              _buildModGridCard(mods[index], l10n),
+                              grid: true,
+                            );
                           },
                         )
                       : ListView.builder(
@@ -7265,10 +7601,16 @@ class _ModInstallerHomePageState extends State<ModInstallerHomePage> with Protoc
                           cacheExtent: 700,
                           padding: const EdgeInsets.only(bottom: 12),
                           itemCount: mods.length,
+                          findChildIndexCallback: findIndexByKey,
                           itemBuilder: (context, index) {
-                            return _buildModListTile(mods[index], l10n);
+                            return _maybeReorderable(
+                              mods[index],
+                              _buildModListTile(mods[index], l10n),
+                              grid: false,
+                            );
                           },
                         ),
+                ),
                 ),
         ),
       ],

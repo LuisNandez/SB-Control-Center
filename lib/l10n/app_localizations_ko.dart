@@ -715,6 +715,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get sortByDate => '날짜';
 
   @override
+  String get sortByCustom => '수동';
+
+  @override
+  String get sortByCustomHint => '모드를 드래그하여 순서를 변경하세요';
+
+  @override
   String get noModsFound => '모드를 찾을 수 없습니다.';
 
   @override

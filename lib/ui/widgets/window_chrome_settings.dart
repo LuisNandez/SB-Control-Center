@@ -3,16 +3,18 @@
 // Secciones de Ajustes → Apariencia para la barra de la ventana:
 //   * Botones de la ventana: Automático / Estilo semáforo / Estilo Windows.
 //   * Barra superior: fusionar (o no) con la barra de herramientas.
+//   * Ventana: recordar tamaño y posición entre sesiones (activado por defecto).
 //
 // Los textos están aquí (10 idiomas) para no tocar los ARB; si prefieres,
 // pásalos a los ARB y sustituye [_WindowChromeText] por AppLocalizations.
 import 'package:flutter/material.dart';
 
+import '../../services/window_state_service.dart';
 import '../theme/ios_theme.dart';
 import 'app_title_bar.dart';
 import 'ios_settings_widgets.dart';
 
-/// Devuelve las dos secciones listas para añadir a la lista de Apariencia.
+/// Devuelve las tres secciones listas para añadir a la lista de Apariencia.
 List<Widget> windowChromeSections(BuildContext context) {
   final t = _WindowChromeText.of(context);
   final WindowButtonsPref current = WindowChrome.buttons.value;
@@ -82,6 +84,25 @@ List<Widget> windowChromeSections(BuildContext context) {
         ),
       ],
     ),
+    IosSettingsSection(
+      title: t.windowSection,
+      children: [
+        ValueListenableBuilder<bool>(
+          valueListenable: WindowStateService.enabled,
+          builder: (context, bool on, _) => IosSettingsSwitchTile(
+            leading: IosIconBadge(
+              color: IosColors.orange,
+              child: const Icon(Icons.aspect_ratio_rounded,
+                  color: Colors.white, size: 16),
+            ),
+            title: t.remember,
+            subtitle: t.rememberDesc,
+            value: on,
+            onChanged: (bool v) => WindowStateService.setEnabled(v),
+          ),
+        ),
+      ],
+    ),
   ];
 }
 
@@ -106,6 +127,9 @@ class _WindowChromeText {
   String get barSection => _m['ts']!;
   String get merge => _m['mg']!;
   String get mergeDesc => _m['mgd']!;
+  String get windowSection => _m['ws']!;
+  String get remember => _m['rm']!;
+  String get rememberDesc => _m['rmd']!;
 
   static const Map<String, Map<String, String>> _all = {
     'es': {
@@ -120,6 +144,9 @@ class _WindowChromeText {
       'ts': 'Barra superior',
       'mg': 'Fusionar con la barra de herramientas',
       'mgd': 'Une la barra de la ventana con la de abajo y oculta el nombre de la app',
+      'ws': 'Ventana',
+      'rm': 'Recordar tamaño y posición',
+      'rmd': 'Al abrir la app, la ventana vuelve a donde y como la dejaste',
     },
     'en': {
       'bs': 'Window buttons',
@@ -133,6 +160,9 @@ class _WindowChromeText {
       'ts': 'Top bar',
       'mg': 'Merge with the toolbar',
       'mgd': 'Joins the window bar with the toolbar below and hides the app name',
+      'ws': 'Window',
+      'rm': 'Remember size and position',
+      'rmd': 'When opening the app, the window returns to where and how you left it',
     },
     'de': {
       'bs': 'Fensterschaltflächen',
@@ -146,6 +176,9 @@ class _WindowChromeText {
       'ts': 'Obere Leiste',
       'mg': 'Mit der Symbolleiste verbinden',
       'mgd': 'Verbindet die Fensterleiste mit der Symbolleiste darunter und blendet den App-Namen aus',
+      'ws': 'Fenster',
+      'rm': 'Größe und Position merken',
+      'rmd': 'Beim Start erscheint das Fenster wieder so, wie du es verlassen hast',
     },
     'fr': {
       'bs': 'Boutons de la fenêtre',
@@ -159,6 +192,9 @@ class _WindowChromeText {
       'ts': 'Barre supérieure',
       'mg': 'Fusionner avec la barre d’outils',
       'mgd': 'Réunit la barre de la fenêtre et la barre d’outils, et masque le nom de l’app',
+      'ws': 'Fenêtre',
+      'rm': 'Mémoriser la taille et la position',
+      'rmd': 'À l’ouverture, la fenêtre revient là où vous l’aviez laissée, avec la même taille',
     },
     'it': {
       'bs': 'Pulsanti della finestra',
@@ -172,6 +208,9 @@ class _WindowChromeText {
       'ts': 'Barra superiore',
       'mg': 'Unisci alla barra degli strumenti',
       'mgd': 'Unisce la barra della finestra a quella sotto e nasconde il nome dell’app',
+      'ws': 'Finestra',
+      'rm': 'Ricorda dimensioni e posizione',
+      'rmd': 'All’apertura, la finestra torna dove e come l’avevi lasciata',
     },
     'pt': {
       'bs': 'Botões da janela',
@@ -185,6 +224,9 @@ class _WindowChromeText {
       'ts': 'Barra superior',
       'mg': 'Mesclar com a barra de ferramentas',
       'mgd': 'Une a barra da janela com a de baixo e oculta o nome do app',
+      'ws': 'Janela',
+      'rm': 'Lembrar tamanho e posição',
+      'rmd': 'Ao abrir o app, a janela volta onde e como você a deixou',
     },
     'ru': {
       'bs': 'Кнопки окна',
@@ -198,6 +240,9 @@ class _WindowChromeText {
       'ts': 'Верхняя панель',
       'mg': 'Объединить с панелью инструментов',
       'mgd': 'Соединяет панель окна с панелью инструментов ниже и скрывает название приложения',
+      'ws': 'Окно',
+      'rm': 'Запоминать размер и положение',
+      'rmd': 'При запуске окно появляется там и в том виде, как вы его оставили',
     },
     'ja': {
       'bs': 'ウィンドウボタン',
@@ -211,6 +256,9 @@ class _WindowChromeText {
       'ts': 'トップバー',
       'mg': 'ツールバーと統合',
       'mgd': 'ウィンドウバーを下のツールバーと一体化し、アプリ名を非表示にします',
+      'ws': 'ウィンドウ',
+      'rm': 'サイズと位置を記憶',
+      'rmd': '起動時に、前回の場所とサイズでウィンドウを開きます',
     },
     'ko': {
       'bs': '창 버튼',
@@ -224,6 +272,9 @@ class _WindowChromeText {
       'ts': '상단 바',
       'mg': '도구 모음과 통합',
       'mgd': '창 막대를 아래 도구 모음과 합치고 앱 이름을 숨깁니다',
+      'ws': '창',
+      'rm': '크기와 위치 기억',
+      'rmd': '앱을 열 때 마지막으로 사용한 위치와 크기로 창이 열립니다',
     },
     'zh': {
       'bs': '窗口按钮',
@@ -237,6 +288,9 @@ class _WindowChromeText {
       'ts': '顶部栏',
       'mg': '与工具栏合并',
       'mgd': '将窗口栏与下方工具栏合并，并隐藏应用名称',
+      'ws': '窗口',
+      'rm': '记住大小和位置',
+      'rmd': '打开应用时，窗口会恢复到上次的位置和大小',
     },
   };
 }

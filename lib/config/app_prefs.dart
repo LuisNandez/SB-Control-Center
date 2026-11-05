@@ -13,6 +13,12 @@ class AppPrefs {
   /// Datos que tenía la entrada de GPU de Windows para esta app ANTES de activar
   /// la opción anterior (se restauran al desactivarla; ausente = no había).
   static const String gpuPreviousPreference = 'gpuPreviousPreference';
+  /// Ajustes → Apariencia → "Recordar tamaño y posición": la ventana se abre
+  /// como se dejó la última vez (por defecto: activada).
+  static const String rememberWindowState = 'rememberWindowState';
+  /// Último tamaño/posición de la ventana (JSON: x, y, w, h, max). Lo gestiona
+  /// [WindowStateService].
+  static const String windowState = 'windowState';
   static const String gameRootPath = 'gameRootPath';
   static const String sevenZipPath = 'sevenZipPath';
   static const String nexusApiKey = 'nexusApiKey';
@@ -20,6 +26,9 @@ class AppPrefs {
   static const String filterMode = 'filterMode';
   static const String modTypeFilterMode = 'modTypeFilterMode';
   static const String sortMode = 'sortMode';
+  /// Orden manual de los mods: nombres de carpeta en el orden elegido por el
+  /// usuario arrastrando (se usa con ModSort.custom).
+  static const String customModOrder = 'customModOrder';
   static const String viewMode = 'viewMode';
   static const String showModTypeTags = 'showModTypeTags';
   /// Asignación automática de trajes al instalar mods de reemplazo (por defecto: activada).

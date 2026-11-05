@@ -734,6 +734,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sortByDate => 'Дата';
 
   @override
+  String get sortByCustom => 'Вручную';
+
+  @override
+  String get sortByCustomHint => 'Перетаскивайте моды, чтобы изменить порядок';
+
+  @override
   String get noModsFound => 'Моды не найдены.';
 
   @override

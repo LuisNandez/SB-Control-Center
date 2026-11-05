@@ -205,6 +205,8 @@
     "filterRepaired": "修復済み",
     "sortByName": "名前",
     "sortByDate": "日付",
+    "sortByCustom": "手動",
+    "sortByCustomHint": "MODをドラッグして並べ替え",
     "noModsFound": "MODが見つかりません。",
     "viewTypeGrid": "グリッド表示",
     "viewTypeList": "リスト表示",

@@ -745,6 +745,12 @@ class AppLocalizationsIt extends AppLocalizations {
   String get sortByDate => 'Data';
 
   @override
+  String get sortByCustom => 'Manuale';
+
+  @override
+  String get sortByCustomHint => 'Trascina i mod per riordinarli';
+
+  @override
   String get noModsFound => 'Nessuna mod trovata.';
 
   @override

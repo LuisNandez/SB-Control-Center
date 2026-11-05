@@ -205,6 +205,8 @@
     "filterRepaired": "복구됨",
     "sortByName": "이름",
     "sortByDate": "날짜",
+    "sortByCustom": "수동",
+    "sortByCustomHint": "모드를 드래그하여 순서를 변경하세요",
     "noModsFound": "모드를 찾을 수 없습니다.",
     "viewTypeGrid": "그리드 보기",
     "viewTypeList": "목록 보기",

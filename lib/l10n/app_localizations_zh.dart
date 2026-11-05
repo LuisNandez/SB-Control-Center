@@ -704,6 +704,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sortByDate => '日期';
 
   @override
+  String get sortByCustom => '手动';
+
+  @override
+  String get sortByCustomHint => '拖动模组以重新排序';
+
+  @override
   String get noModsFound => '未找到模组。';
 
   @override

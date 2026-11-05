@@ -205,6 +205,8 @@
     "filterRepaired": "Reparados",
     "sortByName": "Nombre",
     "sortByDate": "Fecha",
+    "sortByCustom": "Manual",
+    "sortByCustomHint": "Arrastra los mods para reordenarlos",
     "noModsFound": "No se encontraron mods.",
     "viewTypeGrid": "Vista de cuadrícula",
     "viewTypeList": "Vista de lista",

@@ -12,6 +12,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/game_repair_service.dart';
+import '../../services/window_state_service.dart';
 import '../theme/ios_theme.dart';
 import '../widgets/ios_widgets.dart';
 
@@ -44,6 +45,9 @@ class RepairGameDialog {
     Size? savedSize;
     bool wasMaximized = false;
     bool wasFullScreen = false;
+
+    // El tamaño compacto es temporal: no debe guardarse como el de la ventana.
+    WindowStateService.suspend();
 
     // ------------------------------------------ Ventana compacta y al frente
     try {
@@ -107,6 +111,7 @@ class RepairGameDialog {
       if (wasMaximized) await windowManager.maximize();
       await windowManager.focus();
     } catch (_) {}
+    WindowStateService.resume();
 
     return controller.success;
   }
