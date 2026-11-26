@@ -51,7 +51,9 @@ class NotificationService {
           opacity: curved,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: AppMetrics.md ? const Offset(0, 0.35) : const Offset(0.35, 0),
+              begin: AppMetrics.md
+                  ? const Offset(0, 0.35)
+                  : const Offset(0.35, 0),
               end: Offset.zero,
             ).animate(curved),
             child: child,
@@ -262,7 +264,9 @@ class _IosBannerState extends State<_IosBanner> {
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
                     decoration: BoxDecoration(
-                      color: IosColors.card.withAlpha(0xCC), // material "thick" oscuro
+                      color: IosColors.card.withAlpha(
+                        0xCC,
+                      ), // material "thick" oscuro
                       borderRadius: radius,
                       border: Border.all(
                         color: IosColors.overlay(0x24),

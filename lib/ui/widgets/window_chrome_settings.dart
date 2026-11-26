@@ -74,8 +74,11 @@ List<Widget> windowChromeSections(BuildContext context) {
         IosSettingsSwitchTile(
           leading: IosIconBadge(
             color: IosColors.teal,
-            child: const Icon(Icons.web_asset_rounded,
-                color: Colors.white, size: 16),
+            child: const Icon(
+              Icons.web_asset_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
           ),
           title: t.merge,
           subtitle: t.mergeDesc,
@@ -92,8 +95,11 @@ List<Widget> windowChromeSections(BuildContext context) {
           builder: (context, bool on, _) => IosSettingsSwitchTile(
             leading: IosIconBadge(
               color: IosColors.orange,
-              child: const Icon(Icons.aspect_ratio_rounded,
-                  color: Colors.white, size: 16),
+              child: const Icon(
+                Icons.aspect_ratio_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
             ),
             title: t.remember,
             subtitle: t.rememberDesc,
@@ -143,7 +149,8 @@ class _WindowChromeText {
       'wd': 'Botones a la derecha',
       'ts': 'Barra superior',
       'mg': 'Fusionar con la barra de herramientas',
-      'mgd': 'Une la barra de la ventana con la de abajo y oculta el nombre de la app',
+      'mgd':
+          'Une la barra de la ventana con la de abajo y oculta el nombre de la app',
       'ws': 'Ventana',
       'rm': 'Recordar tamaño y posición',
       'rmd': 'Al abrir la app, la ventana vuelve a donde y como la dejaste',
@@ -159,14 +166,17 @@ class _WindowChromeText {
       'wd': 'Buttons on the right',
       'ts': 'Top bar',
       'mg': 'Merge with the toolbar',
-      'mgd': 'Joins the window bar with the toolbar below and hides the app name',
+      'mgd':
+          'Joins the window bar with the toolbar below and hides the app name',
       'ws': 'Window',
       'rm': 'Remember size and position',
-      'rmd': 'When opening the app, the window returns to where and how you left it',
+      'rmd':
+          'When opening the app, the window returns to where and how you left it',
     },
     'de': {
       'bs': 'Fensterschaltflächen',
-      'bf': 'Wo die Schaltflächen zum Schließen, Minimieren und Maximieren stehen.',
+      'bf':
+          'Wo die Schaltflächen zum Schließen, Minimieren und Maximieren stehen.',
       'a': 'Automatisch',
       'ad': 'macOS-Stil links; Material und Flach rechts',
       'm': 'Ampel-Stil',
@@ -175,10 +185,12 @@ class _WindowChromeText {
       'wd': 'Schaltflächen rechts',
       'ts': 'Obere Leiste',
       'mg': 'Mit der Symbolleiste verbinden',
-      'mgd': 'Verbindet die Fensterleiste mit der Symbolleiste darunter und blendet den App-Namen aus',
+      'mgd':
+          'Verbindet die Fensterleiste mit der Symbolleiste darunter und blendet den App-Namen aus',
       'ws': 'Fenster',
       'rm': 'Größe und Position merken',
-      'rmd': 'Beim Start erscheint das Fenster wieder so, wie du es verlassen hast',
+      'rmd':
+          'Beim Start erscheint das Fenster wieder so, wie du es verlassen hast',
     },
     'fr': {
       'bs': 'Boutons de la fenêtre',
@@ -191,10 +203,12 @@ class _WindowChromeText {
       'wd': 'Boutons à droite',
       'ts': 'Barre supérieure',
       'mg': 'Fusionner avec la barre d’outils',
-      'mgd': 'Réunit la barre de la fenêtre et la barre d’outils, et masque le nom de l’app',
+      'mgd':
+          'Réunit la barre de la fenêtre et la barre d’outils, et masque le nom de l’app',
       'ws': 'Fenêtre',
       'rm': 'Mémoriser la taille et la position',
-      'rmd': 'À l’ouverture, la fenêtre revient là où vous l’aviez laissée, avec la même taille',
+      'rmd':
+          'À l’ouverture, la fenêtre revient là où vous l’aviez laissée, avec la même taille',
     },
     'it': {
       'bs': 'Pulsanti della finestra',
@@ -207,7 +221,8 @@ class _WindowChromeText {
       'wd': 'Pulsanti a destra',
       'ts': 'Barra superiore',
       'mg': 'Unisci alla barra degli strumenti',
-      'mgd': 'Unisce la barra della finestra a quella sotto e nasconde il nome dell’app',
+      'mgd':
+          'Unisce la barra della finestra a quella sotto e nasconde il nome dell’app',
       'ws': 'Finestra',
       'rm': 'Ricorda dimensioni e posizione',
       'rmd': 'All’apertura, la finestra torna dove e come l’avevi lasciata',
@@ -239,10 +254,12 @@ class _WindowChromeText {
       'wd': 'Кнопки справа',
       'ts': 'Верхняя панель',
       'mg': 'Объединить с панелью инструментов',
-      'mgd': 'Соединяет панель окна с панелью инструментов ниже и скрывает название приложения',
+      'mgd':
+          'Соединяет панель окна с панелью инструментов ниже и скрывает название приложения',
       'ws': 'Окно',
       'rm': 'Запоминать размер и положение',
-      'rmd': 'При запуске окно появляется там и в том виде, как вы его оставили',
+      'rmd':
+          'При запуске окно появляется там и в том виде, как вы его оставили',
     },
     'ja': {
       'bs': 'ウィンドウボタン',

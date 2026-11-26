@@ -52,10 +52,14 @@ class RepositionAnimator extends StatefulWidget {
 
 class _RepositionAnimatorState extends State<RepositionAnimator>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller =
-      AnimationController(vsync: this, duration: widget.duration);
-  late final Animation<double> _animation =
-      CurvedAnimation(parent: _controller, curve: widget.curve);
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  );
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: widget.curve,
+  );
 
   void _onMoved() {
     if (!mounted) return;
@@ -100,12 +104,12 @@ class _RepositionBox extends SingleChildRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) => _RenderRepositionBox(
-        animation: animation,
-        reference: reference,
-        scrollController: scrollController,
-        enabled: enabled,
-        onMoved: onMoved,
-      );
+    animation: animation,
+    reference: reference,
+    scrollController: scrollController,
+    enabled: enabled,
+    onMoved: onMoved,
+  );
 
   @override
   void updateRenderObject(

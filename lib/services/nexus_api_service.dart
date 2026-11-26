@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/nexus_plan.dart';
 import '../utils/version_utils.dart';
 import 'endorse_info_store.dart';
+import 'nexus_auth.dart';
 
 /// Motivo por el que no se pudo cambiar el endorse de un mod.
 enum EndorseFailure {
@@ -138,6 +139,9 @@ class NexusApiService {
 
   // --- FUNCIÓN INTERNA PARA ACTUALIZAR LOS LÍMITES ---
   static void _updateLimitsFromHeaders(http.Response response) {
+    // 401 con sesión OAuth: el token pudo caducar/revocarse; se fuerza un
+    // refresco en la próxima petición (NexusAuth lo limita a 1 cada 30 s).
+    if (response.statusCode == 401) NexusAuth.markUnauthorized();
     if (response.headers.containsKey('x-rl-daily-remaining')) {
       dailyRemaining = response.headers['x-rl-daily-remaining']!;
     }
@@ -156,7 +160,7 @@ class NexusApiService {
     try {
       final response = await http.get(
         Uri.parse('https://api.nexusmods.com/v1/users/validate.json'),
-        headers: {'apikey': apiKey, 'accept': 'application/json'},
+        headers: await NexusAuth.headers(apiKey, forceApiKey: true),
       );
       _updateLimitsFromHeaders(response); // <-- Actualizamos aquí
       return response.statusCode == 200;
@@ -185,7 +189,7 @@ class NexusApiService {
       return cached.data;
     }
 
-    final headers = {'apikey': apiKey, 'accept': 'application/json'};
+    final headers = await NexusAuth.headers(apiKey);
 
     try {
       final modDetailsUrl = Uri.parse(
@@ -605,11 +609,10 @@ class NexusApiService {
       final response = await http
           .post(
             Uri.parse(_graphqlUrl),
-            headers: {
-              'apikey': apiKey,
-              'content-type': 'application/json',
-              'accept': 'application/json',
-            },
+            headers: await NexusAuth.headers(
+              apiKey,
+              extra: {'content-type': 'application/json'},
+            ),
             body: json.encode({'query': query, 'variables': variables}),
           )
           .timeout(const Duration(seconds: 20));
@@ -640,7 +643,7 @@ class NexusApiService {
     try {
       final response = await http.get(
         Uri.parse('https://api.nexusmods.com/v1/games/stellarblade/mods/$nexusId.json'),
-        headers: {'apikey': apiKey, 'accept': 'application/json'},
+        headers: await NexusAuth.headers(apiKey),
       );
       _updateLimitsFromHeaders(response);
       if (response.statusCode != 200) return null;
@@ -658,7 +661,7 @@ class NexusApiService {
   static Future<String?> fetchLatestModVersion(String nexusId, String? apiKey) async {
     try {
       if (apiKey == null || apiKey.isEmpty) return null;
-      final headers = {'apikey': apiKey, 'accept': 'application/json'};
+      final headers = await NexusAuth.headers(apiKey);
       final url = Uri.parse(
         'https://api.nexusmods.com/v1/games/stellarblade/mods/$nexusId/files.json',
       );
@@ -718,7 +721,7 @@ class NexusApiService {
       }
       final response = await http.get(
         uri,
-        headers: {'apikey': apiKey, 'accept': 'application/json'},
+        headers: await NexusAuth.headers(apiKey),
       );
       _updateLimitsFromHeaders(response);
       if (response.statusCode != 200) return null;
@@ -746,7 +749,7 @@ class NexusApiService {
         Uri.parse(
           'https://api.nexusmods.com/v1/games/stellarblade/mods/md5_search/$md5Hash.json',
         ),
-        headers: {'apikey': apiKey, 'accept': 'application/json'},
+        headers: await NexusAuth.headers(apiKey),
       );
       _updateLimitsFromHeaders(response);
       if (response.statusCode != 200) return [];
@@ -771,7 +774,7 @@ class NexusApiService {
       );
       final response = await http.get(
         uri,
-        headers: {'apikey': apiKey, 'accept': 'application/json'},
+        headers: await NexusAuth.headers(apiKey),
       );
       _updateLimitsFromHeaders(response); // <-- Actualizamos aquí
       return response.statusCode == 200;
@@ -860,14 +863,17 @@ class NexusApiService {
       '/v1/games/${ref.game}/mods/${ref.modId}/files/${ref.fileId}/download_link.json',
       query.isEmpty ? null : query,
     );
-    final headers = {'apikey': apiKey, 'accept': 'application/json'};
+    final headers = await NexusAuth.headers(apiKey);
 
     http.Response? response;
     NxmLinkException? lastError;
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
+        // Cabeceras recalculadas en cada intento: si el token caducó entre un
+        // intento y otro, NexusAuth lo refresca.
         final r = await http
-            .get(apiUri, headers: headers)
+            .get(apiUri,
+                headers: attempt == 0 ? headers : await NexusAuth.headers(apiKey))
             .timeout(const Duration(seconds: 20));
         _updateLimitsFromHeaders(r);
         if (r.statusCode == 200) {
@@ -875,7 +881,11 @@ class NexusApiService {
           break;
         }
         lastError = _linkExceptionForStatus(r.statusCode);
-        final retryable = r.statusCode == 429 || r.statusCode >= 500;
+        // Con OAuth, un 401 suele ser un token caducado: se reintenta una vez
+        // (NexusAuth ya marcó el refresco).
+        final retryable = r.statusCode == 429 ||
+            r.statusCode >= 500 ||
+            (r.statusCode == 401 && NexusAuth.isSignedIn && attempt == 0);
         if (!retryable) throw lastError;
       } on NxmLinkException {
         rethrow;
@@ -924,7 +934,7 @@ class NexusApiService {
       final detailsUri = Uri.parse(
           'https://api.nexusmods.com/v1/games/${ref.game}/mods/${ref.modId}/files/${ref.fileId}.json');
       final dr = await http
-          .get(detailsUri, headers: headers)
+          .get(detailsUri, headers: await NexusAuth.headers(apiKey))
           .timeout(const Duration(seconds: 15));
       _updateLimitsFromHeaders(dr);
       if (dr.statusCode == 200) {
@@ -976,12 +986,15 @@ class NexusApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> validateAndGetProfile(String apiKey) async {
+  /// [forceApiKey]: valida [apiKey] como clave personal aunque haya sesión OAuth
+  /// (al escribir una clave nueva en el diálogo de la API key).
+  static Future<Map<String, dynamic>?> validateAndGetProfile(String apiKey,
+      {bool forceApiKey = false}) async {
     if (apiKey.isEmpty) return null;
     try {
       final response = await http.get(
         Uri.parse('https://api.nexusmods.com/v1/users/validate.json'),
-        headers: {'apikey': apiKey, 'accept': 'application/json'},
+        headers: await NexusAuth.headers(apiKey, forceApiKey: forceApiKey),
       );
       _updateLimitsFromHeaders(response); // <-- Actualizamos aquí
 
@@ -1020,7 +1033,7 @@ class NexusApiService {
       final response = await http
           .get(
             Uri.parse('https://api.nexusmods.com/v1/user/endorsements.json'),
-            headers: {'apikey': apiKey, 'accept': 'application/json'},
+            headers: await NexusAuth.headers(apiKey),
           )
           .timeout(const Duration(seconds: 20));
       _updateLimitsFromHeaders(response);
@@ -1062,7 +1075,7 @@ class NexusApiService {
             Uri.parse(
               'https://api.nexusmods.com/v1/games/stellarblade/mods/$nexusId.json',
             ),
-            headers: {'apikey': apiKey, 'accept': 'application/json'},
+            headers: await NexusAuth.headers(apiKey),
           )
           .timeout(const Duration(seconds: 20));
       _updateLimitsFromHeaders(response);
@@ -1102,7 +1115,7 @@ class NexusApiService {
             Uri.parse(
               'https://api.nexusmods.com/v1/games/stellarblade/mods/$nexusId.json',
             ),
-            headers: {'apikey': apiKey, 'accept': 'application/json'},
+            headers: await NexusAuth.headers(apiKey),
           )
           .timeout(const Duration(seconds: 20));
       _updateLimitsFromHeaders(response);
@@ -1143,7 +1156,7 @@ class NexusApiService {
       final response = await http
           .get(
             Uri.parse('https://api.nexusmods.com/v1/games/stellarblade.json'),
-            headers: {'apikey': apiKey, 'accept': 'application/json'},
+            headers: await NexusAuth.headers(apiKey),
           )
           .timeout(const Duration(seconds: 20));
       _updateLimitsFromHeaders(response);
@@ -1228,11 +1241,10 @@ class NexusApiService {
               'https://api.nexusmods.com/v1/games/stellarblade/mods/$nexusId/'
               '${endorse ? 'endorse' : 'abstain'}.json',
             ),
-            headers: {
-              'apikey': apiKey,
-              'accept': 'application/json',
-              'content-type': 'application/json',
-            },
+            headers: await NexusAuth.headers(
+              apiKey,
+              extra: {'content-type': 'application/json'},
+            ),
             body: json.encode({
               if (cleanVersion.isNotEmpty) 'Version': cleanVersion,
             }),

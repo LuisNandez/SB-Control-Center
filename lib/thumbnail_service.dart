@@ -75,13 +75,15 @@ img.Image? _smartDecodeIsolate(Uint8List bytes) {
 Future<String?> _processImageIsolate(_ProcessImageRequest request) async {
   final tmp = File('${request.thumbnailPath}.tmp');
   try {
-    final Uint8List originalBytes =
-        await File(request.originalPath).readAsBytes();
+    final Uint8List originalBytes = await File(
+      request.originalPath,
+    ).readAsBytes();
 
     img.Image? image = _smartDecodeIsolate(originalBytes);
     if (image == null) {
       debugPrint(
-          '⚠️ [ISOLATE] No se pudo decodificar: ${request.originalPath}');
+        '⚠️ [ISOLATE] No se pudo decodificar: ${request.originalPath}',
+      );
       return null;
     }
 
@@ -93,8 +95,10 @@ Future<String?> _processImageIsolate(_ProcessImageRequest request) async {
     await tmp.rename(request.thumbnailPath);
     return request.thumbnailPath;
   } catch (e, s) {
-    debugPrint('🛑 Error en el isolate de miniaturas: ${request.originalPath}\n'
-        '$e\n$s');
+    debugPrint(
+      '🛑 Error en el isolate de miniaturas: ${request.originalPath}\n'
+      '$e\n$s',
+    );
     try {
       if (await tmp.exists()) await tmp.delete();
     } catch (_) {}
@@ -178,8 +182,9 @@ class ThumbnailService {
 
   /// Máximo de portadas descargándose / comprimiéndose a la vez. cwebp es
   /// nativo y ligero, así que se puede paralelizar más que con isolates.
-  final _TaskGate _gate =
-      _TaskGate(math.max(2, math.min(4, Platform.numberOfProcessors ~/ 2)));
+  final _TaskGate _gate = _TaskGate(
+    math.max(2, math.min(4, Platform.numberOfProcessors ~/ 2)),
+  );
 
   // -------------------------------------------------------------------------
   // INICIALIZACIÓN
@@ -205,8 +210,10 @@ class ThumbnailService {
 
       await _prepareCwebp(appDir);
 
-      debugPrint('--- CACHÉ DE MINIATURAS EN: ${_thumbnailCacheDir!.path} '
-          '(motor: ${_cwebpExe != null ? 'cwebp' : 'isolate/image'}) ---');
+      debugPrint(
+        '--- CACHÉ DE MINIATURAS EN: ${_thumbnailCacheDir!.path} '
+        '(motor: ${_cwebpExe != null ? 'cwebp' : 'isolate/image'}) ---',
+      );
 
       _isInitialized = true;
       // En segundo plano: la carpeta puede tener miles de archivos.
@@ -235,8 +242,10 @@ class ThumbnailService {
       }
       _cwebpExe = exe;
     } catch (e) {
-      debugPrint('cwebp.exe no disponible (¿falta "assets/cwebp.exe" en el '
-          'pubspec.yaml?): $e. Se usará el método de respaldo.');
+      debugPrint(
+        'cwebp.exe no disponible (¿falta "assets/cwebp.exe" en el '
+        'pubspec.yaml?): $e. Se usará el método de respaldo.',
+      );
     }
   }
 
@@ -427,8 +436,10 @@ class ThumbnailService {
 
     // Fallback: se usa la imagen original (sin procesar). Solo se recuerda en
     // memoria, así la próxima sesión se vuelve a intentar.
-    debugPrint('⚠️ Fallback: usando la imagen original para '
-        '${p.basename(sourcePath)}');
+    debugPrint(
+      '⚠️ Fallback: usando la imagen original para '
+      '${p.basename(sourcePath)}',
+    );
     _remember(cacheKey, source);
     return source;
   }
@@ -448,10 +459,10 @@ class ThumbnailService {
     }
 
     if (_imageCacheDir == null) return null;
-    final String extension =
-        p.extension(sourcePath).isNotEmpty ? p.extension(sourcePath) : '.jpg';
-    final originalFile =
-        File(p.join(_imageCacheDir!.path, '$hash$extension'));
+    final String extension = p.extension(sourcePath).isNotEmpty
+        ? p.extension(sourcePath)
+        : '.jpg';
+    final originalFile = File(p.join(_imageCacheDir!.path, '$hash$extension'));
 
     final stat = await originalFile.stat();
     if (stat.type == FileSystemEntityType.file && stat.size > 0) {
@@ -464,8 +475,10 @@ class ThumbnailService {
           .get(Uri.parse(sourcePath))
           .timeout(_downloadTimeout);
       if (response.statusCode != 200) {
-        debugPrint('No se pudo descargar $sourcePath '
-            '(estado ${response.statusCode})');
+        debugPrint(
+          'No se pudo descargar $sourcePath '
+          '(estado ${response.statusCode})',
+        );
         return null;
       }
       // Descarga a un temporal y renombra: sin originales a medias en caché.
@@ -514,10 +527,14 @@ class ThumbnailService {
     try {
       final process = await Process.start(exe.path, [
         '-quiet',
-        '-q', '$_webpQuality',
-        '-resize', '0', '$_thumbHeight',
+        '-q',
+        '$_webpQuality',
+        '-resize',
+        '0',
+        '$_thumbHeight',
         inputPath,
-        '-o', tmp.path,
+        '-o',
+        tmp.path,
       ]);
       // Hay que vaciar stdout/stderr siempre para que el proceso no se bloquee.
       unawaited(process.stdout.drain<void>());

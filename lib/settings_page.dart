@@ -3,6 +3,9 @@
 // barra lateral con categorías a la izquierda y panel de contenido a la derecha que ocupa todo el espacio.
 import 'package:flutter/material.dart';
 import 'l10n/app_localizations.dart';
+import 'l10n/nexus_oauth_strings.dart';
+import 'notification_service.dart';
+import 'services/nexus_auth.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'ui/theme/ios_theme.dart';
 import 'ui/theme/app_themes.dart';
@@ -32,10 +35,13 @@ class SettingsPage extends StatefulWidget {
   final VoidCallback onDeleteAllNexusInfo;
   final VoidCallback onExtractModIds;
   final VoidCallback onTestSelfUpdate;
+
   /// Busca una versión nueva de la app en GitHub (con aviso manual).
   final Future<void> Function() onCheckAppUpdate;
+
   /// Abre el historial de versiones (changelog).
   final Future<void> Function() onShowChangelog;
+
   /// Versión de la app que se eligió omitir (null si no hay) y cómo deshacerlo.
   final Future<String?> Function() onGetSkippedAppVersion;
   final Future<void> Function() onClearSkippedAppVersion;
@@ -53,9 +59,11 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onShowModTypeTagsChanged;
   final bool initialAutoAssignOutfits;
   final ValueChanged<bool> onAutoAssignOutfitsChanged;
+
   /// Tema de colores actual y callback para cambiarlo (se aplica al instante).
   final AppThemeId initialThemeId;
   final ValueChanged<AppThemeId> onThemeChanged;
+
   /// Diseño actual (Cristal / Material / Plano) y callback para cambiarlo (al instante).
   final AppLayoutId initialLayoutId;
   final ValueChanged<AppLayoutId> onLayoutChanged;
@@ -125,10 +133,12 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _refreshingMetadata = false;
   bool _checkingAppUpdate = false;
   String? _skippedAppVersion;
+  bool _signingIn = false;
 
   @override
   void initState() {
     super.initState();
+    NexusAuth.sessionListenable.addListener(_onNexusSessionChanged);
     gameRootPath = widget.initialGameRootPath;
     apiKey = widget.initialApiKey;
     isUe4ssInstalled = widget.isUe4ssInstalled;
@@ -145,6 +155,133 @@ class _SettingsPageState extends State<SettingsPage> {
         if (mounted) _editApiKey();
       });
     }
+  }
+
+  @override
+  void dispose() {
+    NexusAuth.sessionListenable.removeListener(_onNexusSessionChanged);
+    // Si se sale de Ajustes mientras se espera al navegador, se cierra el puerto local.
+    if (_signingIn) NexusOAuthService.cancelSignIn();
+    super.dispose();
+  }
+
+  void _onNexusSessionChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Toque en la fila "Iniciar sesión con Nexus Mods": inicia, cancela la
+  /// espera o (con sesión) cierra la sesión.
+  Future<void> _onNexusTileTap() async {
+    final t = NexusOAuthStrings.of(context);
+
+    if (_signingIn) {
+      NexusOAuthService.cancelSignIn();
+      return;
+    }
+
+    if (NexusAuth.isSignedIn) {
+      final ok = await SettingsDialogs.confirm(
+        context: context,
+        title: t.signOutTitle,
+        message: t.signOutMessage,
+        confirmLabel: t.signOutAction,
+        destructive: true,
+      );
+      if (!ok || !mounted) return;
+      await NexusOAuthService.signOut();
+      if (mounted) {
+        NotificationService.instance.show(
+          context: context,
+          type: NotificationType.info,
+          title: t.signedOut,
+        );
+      }
+      return;
+    }
+
+    setState(() => _signingIn = true);
+    final result = await NexusOAuthService.signIn();
+    if (!mounted) return;
+    setState(() => _signingIn = false);
+
+    String? message;
+    var type = NotificationType.error;
+    switch (result) {
+      case NexusSignInResult.success:
+        message = t.signedInOk;
+        type = NotificationType.success;
+        break;
+      case NexusSignInResult.cancelled:
+        message = t.cancelled;
+        type = NotificationType.info;
+        break;
+      case NexusSignInResult.portBusy:
+        message = t.portBusy.replaceAll('{port}', '${NexusOAuthConfig.redirectPort}');
+        break;
+      case NexusSignInResult.denied:
+        message = t.denied;
+        break;
+      case NexusSignInResult.timeout:
+        message = t.timeout;
+        break;
+      case NexusSignInResult.browserFailed:
+        message = t.browserFailed;
+        break;
+      case NexusSignInResult.failed:
+        message = t.failed;
+        break;
+      case NexusSignInResult.notConfigured:
+      case NexusSignInResult.alreadyInProgress:
+        break;
+    }
+    if (message != null) {
+      NotificationService.instance.show(context: context, type: type, title: message);
+    }
+  }
+
+  /// Fila de inicio de sesión OAuth (recomendado) junto a la API key manual.
+  Widget _nexusSignInTile() {
+    final t = NexusOAuthStrings.of(context);
+    final signedIn = NexusAuth.isSignedIn;
+    final configured = NexusOAuthConfig.isConfigured;
+
+    String subtitle;
+    Color color;
+    if (signedIn) {
+      final name = NexusAuth.userName;
+      subtitle = name == null || name.isEmpty
+          ? t.signedInGeneric
+          : t.signedInAs.replaceAll('{name}', name);
+      color = IosColors.green;
+    } else if (_signingIn) {
+      subtitle = '${t.waiting} ${t.waitingTapToCancel}';
+      color = IosColors.orange;
+    } else if (!configured) {
+      subtitle = t.notConfigured;
+      color = IosColors.orange;
+    } else {
+      subtitle = t.signInSubtitle;
+      color = IosColors.orange;
+    }
+
+    return IosSettingsTile(
+      leading: IosIconBadge(
+        color: IosColors.green,
+        child: const Icon(Icons.login_rounded, color: Colors.white, size: 16),
+      ),
+      title: t.signInTitle,
+      subtitle: subtitle,
+      subtitleColor: color,
+      trailing: _signingIn
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : null,
+      showChevron: !_signingIn && (configured || signedIn),
+      onTap: (configured || signedIn) ? _onNexusTileTap : null,
+    );
   }
 
   /// Lee la versión de la app omitida (para mostrar la opción de deshacerlo).
@@ -260,28 +397,34 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           // Volver a la ventana principal. Con la barra fusionada es también
           // la zona de arrastre y deja sitio al semáforo (si va a la izquierda).
-          WindowChrome.dragArea(Padding(
-            padding: EdgeInsets.fromLTRB(
-              12 + WindowChrome.leftInset,
-              WindowChrome.merged.value ? (WindowChrome.barHeight - 34) / 2 : 12,
-              12,
-              WindowChrome.merged.value ? (WindowChrome.barHeight - 34) / 2 : 0,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: IosToolbarButton(
-                width: 34,
-                height: 34,
-                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                icon: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 16,
-                  color: IosColors.blue,
+          WindowChrome.dragArea(
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                12 + WindowChrome.leftInset,
+                WindowChrome.merged.value
+                    ? (WindowChrome.barHeight - 34) / 2
+                    : 12,
+                12,
+                WindowChrome.merged.value
+                    ? (WindowChrome.barHeight - 34) / 2
+                    : 0,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IosToolbarButton(
+                  width: 34,
+                  height: 34,
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  icon: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    size: 16,
+                    color: IosColors.blue,
+                  ),
+                  onPressed: () => Navigator.of(context).maybePop(),
                 ),
-                onPressed: () => Navigator.of(context).maybePop(),
               ),
             ),
-          )),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 16, 14),
             child: Text(
@@ -321,29 +464,31 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Barra de título del panel (como la de Ajustes del Sistema)
-        WindowChrome.dragArea(Container(
-          // Fusionada: misma altura que la barra de herramientas principal.
-          height: WindowChrome.merged.value ? WindowChrome.barHeight : 56,
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          decoration: BoxDecoration(
-            color: IosColors.background,
-            border: Border(
-              bottom: BorderSide(color: IosColors.separator, width: 0.5),
+        WindowChrome.dragArea(
+          Container(
+            // Fusionada: misma altura que la barra de herramientas principal.
+            height: WindowChrome.merged.value ? WindowChrome.barHeight : 56,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            decoration: BoxDecoration(
+              color: IosColors.background,
+              border: Border(
+                bottom: BorderSide(color: IosColors.separator, width: 0.5),
+              ),
+            ),
+            child: Text(
+              current.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+                color: IosColors.label,
+              ),
             ),
           ),
-          child: Text(
-            current.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.2,
-              color: IosColors.label,
-            ),
-          ),
-        )),
+        ),
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 140),
@@ -393,7 +538,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             title: l10n.settingsLanguage,
             subtitle: l10n.settingsLanguageDesc,
-            value: SettingsDialogs.languages[langCode] ?? langCode.toUpperCase(),
+            value:
+                SettingsDialogs.languages[langCode] ?? langCode.toUpperCase(),
             showChevron: true,
             onTap: widget.onShowLanguageDialog,
           ),
@@ -589,10 +735,12 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             title: 'UE4SS',
-            subtitle:
-                isUe4ssInstalled ? l10n.installedStatus : l10n.notInstalledStatus,
-            subtitleColor:
-                isUe4ssInstalled ? IosColors.green : IosColors.secondaryLabel,
+            subtitle: isUe4ssInstalled
+                ? l10n.installedStatus
+                : l10n.notInstalledStatus,
+            subtitleColor: isUe4ssInstalled
+                ? IosColors.green
+                : IosColors.secondaryLabel,
             trailing: isUe4ssInstalled
                 ? IosTextButton(
                     label: l10n.uninstallButton,
@@ -615,8 +763,9 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: isCnsCoreInstalled
                 ? l10n.installedStatus
                 : l10n.notInstalledStatus,
-            subtitleColor:
-                isCnsCoreInstalled ? IosColors.green : IosColors.secondaryLabel,
+            subtitleColor: isCnsCoreInstalled
+                ? IosColors.green
+                : IosColors.secondaryLabel,
             trailing: isCnsCoreInstalled
                 ? IosTextButton(
                     label: l10n.uninstallButton,
@@ -642,14 +791,16 @@ class _SettingsPageState extends State<SettingsPage> {
     return [
       IosSettingsSection(
         children: [
+          _nexusSignInTile(),
           IosSettingsTile(
             leading: IosIconBadge(
               color: IosColors.yellow,
               child: _badgeIcon(HugeIcons.strokeRoundedKey01),
             ),
             title: l10n.settingsApiKey,
-            subtitle:
-                isApiKeySet ? l10n.settingsApiKeySet : l10n.settingsApiKeyNotSet,
+            subtitle: isApiKeySet
+                ? l10n.settingsApiKeySet
+                : l10n.settingsApiKeyNotSet,
             subtitleColor: isApiKeySet ? IosColors.green : IosColors.orange,
             showChevron: true,
             onTap: _editApiKey,
@@ -881,8 +1032,9 @@ class _SidebarItemState extends State<_SidebarItem> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13.5,
-                    fontWeight:
-                        widget.selected ? FontWeight.w500 : FontWeight.w400,
+                    fontWeight: widget.selected
+                        ? FontWeight.w500
+                        : FontWeight.w400,
                     letterSpacing: -0.15,
                     color: IosColors.label,
                   ),
@@ -894,4 +1046,4 @@ class _SidebarItemState extends State<_SidebarItem> {
       ),
     );
   }
-}
+}

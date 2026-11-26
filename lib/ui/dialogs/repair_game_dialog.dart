@@ -139,8 +139,8 @@ class RepairGameDialog {
       errorText = c.error is RepairGameNotStartedException
           ? l10n.repairErrorGameNotStarted
           : c.error is RepairGameNotClosedException
-              ? l10n.repairErrorGameNotClosed
-              : c.error.toString();
+          ? l10n.repairErrorGameNotClosed
+          : c.error.toString();
     }
 
     return IosDialogShell(
@@ -270,11 +270,7 @@ class _StepRow extends StatelessWidget {
         text = '$label · $skippedLabel';
         break;
       case RepairStepStatus.error:
-        icon = Icon(
-          Icons.cancel_rounded,
-          size: 18,
-          color: IosColors.red,
-        );
+        icon = Icon(Icons.cancel_rounded, size: 18, color: IosColors.red);
         textColor = IosColors.red;
         weight = FontWeight.w600;
         break;

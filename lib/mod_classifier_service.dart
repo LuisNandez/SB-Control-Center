@@ -8,10 +8,10 @@ enum ModDirectoryType {
   genericPak,
   movies,
   logicMod,
-  save,       // <-- NUEVO
-  config,     // <-- NUEVO
-  splash,     // <-- NUEVO
-  unknown
+  save, // <-- NUEVO
+  config, // <-- NUEVO
+  splash, // <-- NUEVO
+  unknown,
 }
 
 class ModClassifierService {
@@ -20,12 +20,15 @@ class ModClassifierService {
     bool hasCnsJson = false;
     bool hasPakFile = false;
     bool hasMovieFile = false; // Cambiado para abarcar .bk2 y .webm
-    bool hasSaveFile = false;   // <-- NUEVO
+    bool hasSaveFile = false; // <-- NUEVO
     bool hasConfigFile = false; // <-- NUEVO
     bool hasSplashFile = false; // <-- NUEVO
     final List<File> configCandidates = [];
 
-    await for (final entity in modDir.list(recursive: false, followLinks: false)) {
+    await for (final entity in modDir.list(
+      recursive: false,
+      followLinks: false,
+    )) {
       if (entity is File) {
         final extension = p.extension(entity.path).toLowerCase();
         final basename = p.basename(entity.path).toLowerCase();
@@ -33,7 +36,9 @@ class ModClassifierService {
         if (extension == '.json') {
           hasJson = true;
           if (basename.endsWith('.dekcns.json')) hasCnsJson = true;
-        } else if (extension == '.pak' || extension == '.ucas' || extension == '.utoc') {
+        } else if (extension == '.pak' ||
+            extension == '.ucas' ||
+            extension == '.utoc') {
           hasPakFile = true;
         } else if (extension == '.bk2' || extension == '.webm') {
           hasMovieFile = true; // Ahora detecta ambos formatos
@@ -41,8 +46,12 @@ class ModClassifierService {
           hasSaveFile = true; // <-- NUEVO
         } else if (ConfigModDetector.isConfigFileName(basename)) {
           configCandidates.add(entity); // se valida abajo (que sea texto)
-        } else if (basename == 'splash.bmp' || extension == '.bat' || (['.bmp', '.jpg', '.jpeg', '.png'].contains(extension) && entity.path.toLowerCase().contains('splash'))) {
-          hasSplashFile = true; // <-- AHORA DETECTA IMÁGENES DENTRO DE CARPETAS "SPLASH"
+        } else if (basename == 'splash.bmp' ||
+            extension == '.bat' ||
+            (['.bmp', '.jpg', '.jpeg', '.png'].contains(extension) &&
+                entity.path.toLowerCase().contains('splash'))) {
+          hasSplashFile =
+              true; // <-- AHORA DETECTA IMÁGENES DENTRO DE CARPETAS "SPLASH"
         }
       }
     }
@@ -78,7 +87,7 @@ class ModClassifierService {
 
     // Si tiene archivos de vídeo y no tiene paks ni json, es de películas
     if (hasMovieFile && !hasJson && !hasPakFile) return ModDirectoryType.movies;
-    if (hasSaveFile) return ModDirectoryType.save;     // <-- NUEVO
+    if (hasSaveFile) return ModDirectoryType.save; // <-- NUEVO
     if (hasConfigFile) return ModDirectoryType.config; // <-- NUEVO
     if (hasSplashFile) return ModDirectoryType.splash; // <-- NUEVO
 

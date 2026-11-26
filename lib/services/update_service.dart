@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import '../models/mod_info.dart';
 import '../utils/version_utils.dart';
+import 'nexus_auth.dart';
 
 class UpdateCheckResult {
   final Map<String, dynamic>? cnsUpdateInfo;
@@ -144,7 +145,7 @@ class UpdateService {
     final String? skippedVersion = editionMod != null
         ? skippedVersionFor(skippedVersions, editionMod, soleEdition: soleEdition)
         : skippedVersions[nexusId];
-    final headers = {'apikey': apiKey, 'accept': 'application/json'};
+    final headers = await NexusAuth.headers(apiKey);
     final url = Uri.parse('https://api.nexusmods.com/v1/games/stellarblade/mods/$nexusId/files.json');
 
     // file_id del archivo de Nexus instalado (si se reconoció al instalarlo)

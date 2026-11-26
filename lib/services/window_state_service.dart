@@ -64,7 +64,9 @@ class WindowStateService {
     enabled.value = prefs.getBool(AppPrefs.rememberWindowState) ?? true;
     if (!enabled.value) return null;
 
-    final Map<String, dynamic>? m = _decode(prefs.getString(AppPrefs.windowState));
+    final Map<String, dynamic>? m = _decode(
+      prefs.getString(AppPrefs.windowState),
+    );
     if (m == null) return null;
 
     Rect? bounds = _readRect(m);
@@ -225,7 +227,8 @@ class WindowStateService {
       // Debe quedar una parte razonable a la vista y la barra superior (zona de
       // arrastre) dentro de la pantalla; si no, se mete entera en ella.
       final Rect inter = fitted.intersect(best);
-      final bool reachable = inter.width >= 160 &&
+      final bool reachable =
+          inter.width >= 160 &&
           inter.height >= 80 &&
           fitted.top >= best.top - 8 &&
           fitted.top <= best.bottom - 80;

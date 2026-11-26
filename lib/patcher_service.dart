@@ -114,7 +114,9 @@ class PatcherService {
   }
 
   Future<PatcherResult> _run(
-      String modsDirectoryPath, List<String> reservedDirectories) async {
+    String modsDirectoryPath,
+    List<String> reservedDirectories,
+  ) async {
     _add(l10n.patcherStarted);
     _add(l10n.workingDirectory(modsDirectoryPath));
 
@@ -128,7 +130,10 @@ class PatcherService {
     if (utocFiles.isEmpty) {
       _add(l10n.noModsFound2);
       return PatcherResult(
-          logEntries: _log, containerIdsFixed: 0, packageIdConflicts: {});
+        logEntries: _log,
+        containerIdsFixed: 0,
+        packageIdConflicts: {},
+      );
     }
 
     // IDs ya ocupados -> quién los tiene. El primero en reclamarlo se queda
@@ -155,8 +160,10 @@ class PatcherService {
         final owner = claimed[toc.containerId];
         if (owner == null) {
           claimed[toc.containerId] = rel;
-          _add(l10n.idRegisteredNoConflict(toc.containerId),
-              LogEntryType.success);
+          _add(
+            l10n.idRegisteredNoConflict(toc.containerId),
+            LogEntryType.success,
+          );
           continue;
         }
 
@@ -168,8 +175,10 @@ class PatcherService {
           await _patchContainer(utoc, toc, newId);
           claimed[newId] = rel;
           fixed++;
-          _add(l10n.patcherIdChange(_hex(oldId), _hex(newId)),
-              LogEntryType.info);
+          _add(
+            l10n.patcherIdChange(_hex(oldId), _hex(newId)),
+            LogEntryType.info,
+          );
           _add(l10n.patcherBackupSaved, LogEntryType.info);
           _add(l10n.patchComplete, LogEntryType.success);
         } on IoStoreException catch (e) {
@@ -205,8 +214,10 @@ class PatcherService {
 
   // ------------------------------------------------------------- utilidades
 
-  Future<List<File>> _findUtocFiles(Directory root,
-      {required bool recursive}) async {
+  Future<List<File>> _findUtocFiles(
+    Directory root, {
+    required bool recursive,
+  }) async {
     final result = <File>[];
     final pending = <Directory>[root];
     while (pending.isNotEmpty) {
@@ -224,13 +235,14 @@ class PatcherService {
         _add(l10n.errorDetails(e.toString()), LogEntryType.error);
       }
     }
-    result.sort(
-        (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()));
+    result.sort((a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()));
     return result;
   }
 
   Future<void> _registerReserved(
-      List<String> dirs, Map<int, String> claimed) async {
+    List<String> dirs,
+    Map<int, String> claimed,
+  ) async {
     for (final path in dirs) {
       final dir = Directory(path);
       if (!await dir.exists()) continue;
@@ -238,7 +250,9 @@ class PatcherService {
         try {
           final head = await _readRange(f, 0, IoStoreToc.minHeaderSize);
           claimed.putIfAbsent(
-              IoStoreToc.peekContainerId(head), () => p.basename(f.path));
+            IoStoreToc.peekContainerId(head),
+            () => p.basename(f.path),
+          );
         } catch (_) {
           // Un .utoc ilegible del juego no debe impedir la reparación.
         }
@@ -322,7 +336,8 @@ class PatcherService {
     final ucasLength = await ucas.length();
     if (loc.ucasOffset + loc.windowLength > ucasLength) {
       throw const IoStoreException(
-          'The ContainerHeader lies outside the .ucas (truncated file?).');
+        'The ContainerHeader lies outside the .ucas (truncated file?).',
+      );
     }
 
     // Si el ID viejo no está EXACTAMENTE donde esperamos, nuestra lectura del
@@ -331,10 +346,13 @@ class PatcherService {
     final hits = _findIdOffsets(window, oldId);
     if (hits.isEmpty) {
       throw const IoStoreException(
-          'Old Container ID not found in the ContainerHeader; refusing to guess.');
+        'Old Container ID not found in the ContainerHeader; refusing to guess.',
+      );
     }
     final newBytes = _idBytes(newId);
-    final patches = [for (final h in hits) _Patch(loc.ucasOffset + h, newBytes)];
+    final patches = [
+      for (final h in hits) _Patch(loc.ucasOffset + h, newBytes),
+    ];
     _add(l10n.ucasReplacementsSuccess(hits.length), LogEntryType.info);
 
     toc.replaceContainerId(newId);
@@ -375,15 +393,17 @@ class PatcherService {
   /// Copia [src] -> [dst] por bloques aplicando [patches]; sin cargar el
   /// archivo completo en memoria.
   Future<void> _copyWithPatches(
-      File src, File dst, List<_Patch> patches) async {
+    File src,
+    File dst,
+    List<_Patch> patches,
+  ) async {
     final reader = await src.open();
     final writer = await dst.open(mode: FileMode.write);
     try {
       final total = await reader.length();
       var pos = 0;
       while (pos < total) {
-        final buf =
-            await reader.read(math.min(_copyBufferSize, total - pos));
+        final buf = await reader.read(math.min(_copyBufferSize, total - pos));
         if (buf.isEmpty) break;
         final end = pos + buf.length;
         for (final patch in patches) {
